@@ -194,31 +194,32 @@ check_connector_exists() {
 
 # ── Step 1: Upload knowledge base files ──────────────────────────────────────
 echo "📚 Step 1/5: Uploading knowledge base..."
-if [ -n "$RETRY_MODE" ] && check_kb_files; then
-  echo "   ⏭️  Already uploaded (2+ files found)"
+TOKEN=$(get_token)
+
+# Build the list of KB files dynamically from knowledge-base/ directory
+KB_FILES=""
+KB_NAMES=""
+for f in ./knowledge-base/*.md; do
+  KB_FILES="${KB_FILES} -F files=@${f};type=text/plain"
+  KB_NAMES="${KB_NAMES} $(basename $f)"
+done
+
+HTTP_CODE=$(eval curl -s -o /dev/null -w "%{http_code}" \
+  -X POST "${AGENT_ENDPOINT}/api/v1/AgentMemory/upload" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -F "triggerIndexing=true" \
+  ${KB_FILES})
+
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+  echo "   ✅ Uploaded:${KB_NAMES}"
 else
-  TOKEN=$(get_token)
-
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-    -X POST "${AGENT_ENDPOINT}/api/v1/AgentMemory/upload" \
-    -H "Authorization: Bearer ${TOKEN}" \
-    -F "triggerIndexing=true" \
-    -F "files=@./knowledge-base/http-500-errors.md;type=text/plain" \
-    -F "files=@./knowledge-base/grubify-architecture.md;type=text/plain")
-
-  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
-    echo "   ✅ Uploaded: http-500-errors.md, grubify-architecture.md"
-  else
-    echo "   ⚠️  Upload returned HTTP ${HTTP_CODE}"
-  fi
+  echo "   ⚠️  Upload returned HTTP ${HTTP_CODE}"
 fi
 echo ""
 
 # ── Step 2: Create incident-handler subagent ─────────────────────────────────
-echo "🤖 Step 2/5: Creating incident-handler subagent..."
-if [ -n "$RETRY_MODE" ] && check_subagent_exists "incident-handler"; then
-  echo "   ⏭️  Already exists"
-elif [ -n "$GITHUB_PAT_VALUE" ]; then
+echo "🤖 Step 2/5: Creating/updating incident-handler subagent..."
+if [ -n "$GITHUB_PAT_VALUE" ]; then
   echo "   GitHub PAT detected — using full config"
   create_subagent "sre-config/agents/incident-handler-full.yaml" "incident-handler"
 else
