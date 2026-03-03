@@ -139,8 +139,8 @@ sre-agent-lab/
 │   ├── break-app.sh                # Fault injection script
 │   ├── setup-github.sh             # Add GitHub integration later
 │   └── create-sample-issues.sh     # Create triage test issues
-└── docs/
-    └── skillable-lab-instructions.md  # Skillable lab markdown
+└── lab/
+    └── skillable-instructions.md   # Skillable lab markdown (copy into Skillable)
 ```
 
 ## Regions
