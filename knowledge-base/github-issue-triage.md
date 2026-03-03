@@ -1,6 +1,6 @@
-# GitHub Issue Triage Runbook
+# Grubify App Issue Triage Runbook
 
-Triage incoming customer issues for repo https://github.com/dm-chelupati/SREagentsupporttickets.git, classify them, and route to the right team.
+Triage incoming issues for the Grubify food ordering application. Classify them, add labels, and route to the right team.
 
 ---
 
@@ -15,11 +15,9 @@ Fetch all open issues from the repo. Focus on issues that are unassigned and unl
 For each issue, check if it's already been triaged:
 
 - Look for a comment starting with "🤖 **SRE Agent Triage Bot**"
-- Check if it has labels (documentation, bug, enhancement, etc.)
+- Check if it has labels
 
 **If both exist and issue hasn't been updated** → Skip it, already handled.
-
-**If user added new info since last comment** → Re-triage it.
 
 **Otherwise** → Triage it now.
 
@@ -31,59 +29,30 @@ Read the title and description. Pick ONE category:
 
 | Category | What it looks like |
 |----------|-------------------|
-| **Documentation** | "How do I...", "Where can I find...", config questions |
-| **Bug** | "Error", "Not working", "Failed", "Broken", crashes |
+| **Bug** | "Error", "500", "crash", "not working", "broken", "OOM", "memory leak" |
+| **Performance** | "slow", "timeout", "high CPU", "high memory", "latency" |
 | **Feature Request** | "Would be nice to have...", "Please add...", suggestions |
+| **Question** | "How do I...", "Where can I find...", configuration help |
 
 ---
 
-## Step 4: Handle Documentation Questions
+## Step 4: Handle Bugs
 
-**Post a comment:**
-```
-🤖 **SRE Agent Triage Bot**
-
-[Answer the question]
-
-Docs: https://learn.microsoft.com/en-us/azure/sre-agent/
-
-📖 Status: **PM to review**
-```
-
-**Add labels:** `documentation`, `PM to review`
-
----
-
-## Step 5: Handle Bugs
-
-### First, pick a sub-category:
+### Pick a sub-category:
 
 | Type | Examples |
 |------|----------|
-| **Onboarding/Access** | Deploy failures, 403/404, agent won't load |
-| **AI Issues** | Bad responses, thread problems, RCA issues |
-| **Non-AI Issues** | Alerts, integrations, UI bugs |
+| **API Bug** | Cart API errors, order failures, menu not loading, 500 errors |
+| **Frontend Bug** | UI broken, page not rendering, CORS errors, failed to load |
+| **Infrastructure** | Container restarts, OOM kills, deployment failures, scaling issues |
+| **Memory Leak** | Memory growing over time, cart accumulating without cleanup |
 
 ### Check if user provided enough info:
 
-**For Onboarding/Access issues, need:**
-- Region
-- Subscription ID + resource group
-- Error message
+**Need at minimum:**
+- What happened (error message or behavior)
 - Steps to reproduce
-
-**For AI issues, need:**
-- Agent name
-- Thread ID
-- Region
-- Steps to reproduce
-- Expected vs actual
-
-**For Non-AI issues, need:**
-- Agent name
-- Region
-- Steps to reproduce
-- Expected vs actual
+- Which endpoint or page was affected
 
 ### If info is missing:
 
@@ -91,7 +60,7 @@ Docs: https://learn.microsoft.com/en-us/azure/sre-agent/
 ```
 🤖 **SRE Agent Triage Bot**
 
-Thanks for reporting. To investigate, we need:
+Thanks for reporting this issue with Grubify. To investigate, we need:
 - [list what's missing]
 
 ⚠️ Status: **Waiting for info from user**
@@ -105,44 +74,73 @@ Thanks for reporting. To investigate, we need:
 ```
 🤖 **SRE Agent Triage Bot**
 
-Thanks for the details. This is ready for investigation.
+Thanks for the details. This bug report is ready for investigation.
 
-✅ Status: **Engineering to investigate**
+Issue summary: [brief summary]
+Affected component: [API / Frontend / Infrastructure]
+Severity: [Critical / High / Medium / Low]
+
+✅ Status: **Ready for investigation**
 ```
 
-**Add labels:** `bug` + sub-category label
-
-**Create PagerDuty incident:**
-- Title: `[GitHub #<issue_number>] <issue_title>`
-- Service: SRE Agent
-- Urgency: High for `onboarding-create-access-failure`, Low for others
-- Description: Include issue link, sub-category, and summary of the bug
+**Add labels:** `bug` + sub-category label + severity label
 
 **Sub-category labels:**
-- `onboarding-create-access-failure`
-- `ai-issue`
-- `non-ai-issue`
+- `api-bug`
+- `frontend-bug`
+- `infrastructure`
+- `memory-leak`
 
 ---
 
-## Step 6: Handle Feature Requests
-
-**First:** Check if the feature already exists. If yes, explain how to use it.
+## Step 5: Handle Performance Issues
 
 **Post comment:**
 ```
 🤖 **SRE Agent Triage Bot**
 
-Thanks for the suggestion! [If exists: explain. If new: "We'll review for our roadmap."]
+Performance issue identified.
 
-Azure SRE Agent is in preview—we're actively collecting feedback.
+Affected area: [API response time / Memory usage / CPU / Scaling]
+Recommended investigation: [Check metrics / Review logs / Load test]
+
+🔧 Status: **Performance investigation needed**
+```
+
+**Add labels:** `performance` + relevant sub-category
+
+---
+
+## Step 6: Handle Feature Requests
+
+**Post comment:**
+```
+🤖 **SRE Agent Triage Bot**
+
+Thanks for the suggestion for Grubify!
+
+[If feature exists: explain how to use it]
+[If new: "This is a great idea. We'll consider it for future development."]
 
 💡 Status: **Feature request**
 ```
 
-**Add labels:** `enhancement`, `feature request`
+**Add labels:** `enhancement`, `feature-request`
 
-**Close the issue.**
+---
+
+## Step 7: Handle Questions
+
+**Post comment:**
+```
+🤖 **SRE Agent Triage Bot**
+
+[Answer the question based on the grubify-architecture knowledge base document]
+
+📖 Status: **Question answered**
+```
+
+**Add labels:** `question`, `answered`
 
 ---
 
@@ -150,10 +148,17 @@ Azure SRE Agent is in preview—we're actively collecting feedback.
 
 | Situation | Labels to Add |
 |-----------|---------------|
-| Doc question | `documentation`, `PM to review` |
 | Bug, need more info | `needs-more-info` + sub-category |
-| Bug, ready to investigate | `bug` + sub-category |
-| Feature request | `enhancement`, `feature request` |
+| Bug, ready to investigate | `bug` + sub-category + severity |
+| Performance issue | `performance` + sub-category |
+| Feature request | `enhancement`, `feature-request` |
+| Question | `question`, `answered` |
+
+**Severity labels:**
+- `critical` — App completely down, all users affected
+- `high` — Major feature broken, many users affected
+- `medium` — Feature partially broken, workaround exists
+- `low` — Minor issue, cosmetic, edge case
 
 ---
 
@@ -161,9 +166,9 @@ Azure SRE Agent is in preview—we're actively collecting feedback.
 
 Always start with: `🤖 **SRE Agent Triage Bot**`
 
-Always end with status:
-- `📖 Status: **PM to review**`
+Always end with a status line:
 - `⚠️ Status: **Waiting for info from user**`
-- `✅ Status: **Engineering to investigate**`
+- `✅ Status: **Ready for investigation**`
+- `🔧 Status: **Performance investigation needed**`
 - `💡 Status: **Feature request**`
-- `🎉 Status: **Addressed user request, issue resolved and closed**`
+- `📖 Status: **Question answered**`
