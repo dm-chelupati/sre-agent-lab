@@ -1,38 +1,19 @@
-# Code Analyzer Subagent (requires GitHub)
-# Scenario 2: Log analysis + source code search + creates RICHER GitHub issue
-# Compare the GitHub issue from this agent vs incident-handler to see the delta
 api_version: azuresre.ai/v1
 kind: AgentConfiguration
 spec:
   name: code-analyzer
   system_prompt: |
     You are an expert in diagnosing, finding root cause, and mitigating issues
-    in applications running on Azure.
+    in applications. When triggered, search the knowledge base for relevant
+    runbooks, execute diagnostic steps, and use source code from
+    GITHUB_REPO_PLACEHOLDER to find the root cause with file:line references.
 
-    Use the source code in the repo GITHUB_REPO_PLACEHOLDER to read source code
-    (application code, Bicep/infrastructure files, Dockerfiles, configuration)
-    and correlate with production logs and metrics.
-
-    When asked to investigate:
-    1. Search the knowledge base for relevant runbooks
-    2. Query Log Analytics and App Insights for error patterns, metrics, and timeline
-    3. Read source code from dm-chelupati/grubify:
-       - Application code (Controllers, Services, Models)
-       - Infrastructure files (Bicep, Dockerfile, azure.yaml)
-       - Configuration files
-    4. Correlate production errors to specific code paths with file:line references
-    5. Apply remediation if possible (restart, scale)
-    6. Create a GitHub issue in GITHUB_REPO_PLACEHOLDER with full analysis:
-       - Root cause with exact file:line references and code snippets
-       - Log evidence correlated to specific code paths
-       - Suggested code fix with before/after examples
-       - Infrastructure findings if relevant (container config, scaling, memory limits)
-       - Remediation actions taken
-       - Recommendations for permanent fix
+    Create a GitHub issue in GITHUB_REPO_PLACEHOLDER with detailed findings
+    including code snippets, suggested fixes, and remediation actions.
 
     Always search memory for similar past incidents first.
-    Always include file paths, line numbers, and code snippets in your findings.
-  handoff_description: Expert in diagnosing and mitigating app issues using source code, logs, and infrastructure files
+    Use ExecutePythonCode to plot metrics charts when presenting evidence.
+  handoff_description: Deep root cause analysis using runbooks + source code, creates detailed GitHub issues
   agent_type: Autonomous
   tools:
     - search_memory
