@@ -14,8 +14,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
 
-# Skip container build/deploy if --skip-build is passed
-SKIP_BUILD="${1:-}"
+# Flags
+SKIP_BUILD=""
+RETRY_MODE=""
+for arg in "$@"; do
+  case "$arg" in
+    --skip-build) SKIP_BUILD="true" ;;
+    --retry)      SKIP_BUILD="true"; RETRY_MODE="true" ;;
+  esac
+done
 
 echo ""
 echo "============================================="
@@ -56,8 +63,8 @@ echo "📦 RG:    ${RESOURCE_GROUP}"
 echo ""
 
 # ── Step 0: Build & deploy Grubify via ACR (cloud-side, no local Docker) ─────
-if [ "$SKIP_BUILD" = "--skip-build" ]; then
-  echo "🐳 Step 0/5: ⏭️  Skipped (--skip-build)"
+if [ -n "$SKIP_BUILD" ]; then
+  echo "🐳 Step 0/5: ⏭️  Skipped (--skip-build or --retry)"
 elif [ -n "$ACR_NAME" ] && [ -d "$PROJECT_DIR/src/grubify/GrubifyApi" ]; then
   echo "🐳 Step 0/5: Building Grubify container images in ACR..."
   ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv 2>/dev/null)
@@ -160,27 +167,58 @@ create_subagent() {
   rm -f "/tmp/${agent_name}-body.json" "/tmp/${agent_name}-resp.txt"
 }
 
+# ── Helper: Check if something exists (for --retry mode) ─────────────────────
+check_kb_files() {
+  local token=$(get_token)
+  local count=$(curl -s "${AGENT_ENDPOINT}/api/v1/AgentMemory/files" -H "Authorization: Bearer ${token}" 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('files',[])))" 2>/dev/null || echo "0")
+  [ "$count" -ge 2 ]
+}
+
+check_subagent_exists() {
+  local name="$1"
+  local token=$(get_token)
+  local code=$(curl -s -o /dev/null -w "%{http_code}" "${AGENT_ENDPOINT}/api/v2/extendedAgent/agents/${name}" -H "Authorization: Bearer ${token}" 2>/dev/null)
+  [ "$code" = "200" ]
+}
+
+check_response_plan_exists() {
+  local token=$(get_token)
+  local count=$(curl -s "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters" -H "Authorization: Bearer ${token}" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len([f for f in d if f.get('handlingAgent')]))" 2>/dev/null || echo "0")
+  [ "$count" -ge 1 ]
+}
+
+check_connector_exists() {
+  local count=$(az rest --method GET --url "https://management.azure.com${AGENT_RESOURCE_ID}/DataConnectors?api-version=${API_VERSION}" --query "length(value)" -o tsv 2>/dev/null || echo "0")
+  [ "$count" -ge 1 ]
+}
+
 # ── Step 1: Upload knowledge base files ──────────────────────────────────────
 echo "📚 Step 1/5: Uploading knowledge base..."
-TOKEN=$(get_token)
-
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-  -X POST "${AGENT_ENDPOINT}/api/v1/AgentMemory/upload" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -F "triggerIndexing=true" \
-  -F "files=@./knowledge-base/http-500-errors.md;type=text/plain" \
-  -F "files=@./knowledge-base/grubify-architecture.md;type=text/plain")
-
-if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
-  echo "   ✅ Uploaded: http-500-errors.md, grubify-architecture.md"
+if [ -n "$RETRY_MODE" ] && check_kb_files; then
+  echo "   ⏭️  Already uploaded (2+ files found)"
 else
-  echo "   ⚠️  Upload returned HTTP ${HTTP_CODE}"
+  TOKEN=$(get_token)
+
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+    -X POST "${AGENT_ENDPOINT}/api/v1/AgentMemory/upload" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -F "triggerIndexing=true" \
+    -F "files=@./knowledge-base/http-500-errors.md;type=text/plain" \
+    -F "files=@./knowledge-base/grubify-architecture.md;type=text/plain")
+
+  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+    echo "   ✅ Uploaded: http-500-errors.md, grubify-architecture.md"
+  else
+    echo "   ⚠️  Upload returned HTTP ${HTTP_CODE}"
+  fi
 fi
 echo ""
 
 # ── Step 2: Create incident-handler subagent ─────────────────────────────────
 echo "🤖 Step 2/5: Creating incident-handler subagent..."
-if [ -n "$GITHUB_PAT_VALUE" ]; then
+if [ -n "$RETRY_MODE" ] && check_subagent_exists "incident-handler"; then
+  echo "   ⏭️  Already exists"
+elif [ -n "$GITHUB_PAT_VALUE" ]; then
   echo "   GitHub PAT detected — using full config"
   create_subagent "sre-config/agents/incident-handler-full.yaml" "incident-handler"
 else
@@ -195,26 +233,29 @@ SUBSCRIPTION_ID=$(az account show --query id -o tsv 2>/dev/null)
 AGENT_RESOURCE_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.App/agents/${AGENT_NAME}"
 API_VERSION="2025-05-01-preview"
 
-# Enable Azure Monitor as the incident platform (ARM PATCH)
-if az rest --method PATCH \
-  --url "https://management.azure.com${AGENT_RESOURCE_ID}?api-version=${API_VERSION}" \
-  --body '{"properties":{"incidentManagementConfiguration":{"type":"AzMonitor","connectionName":"azmonitor"}}}' \
-  --output none 2>&1; then
-  echo "   ✅ Azure Monitor enabled"
+if [ -n "$RETRY_MODE" ] && check_response_plan_exists; then
+  echo "   ⏭️  Response plan already exists"
 else
-  echo "   ⚠️  Could not enable Azure Monitor"
-fi
+  # Enable Azure Monitor as the incident platform (ARM PATCH)
+  if az rest --method PATCH \
+    --url "https://management.azure.com${AGENT_RESOURCE_ID}?api-version=${API_VERSION}" \
+    --body '{"properties":{"incidentManagementConfiguration":{"type":"AzMonitor","connectionName":"azmonitor"}}}' \
+    --output none 2>&1; then
+    echo "   ✅ Azure Monitor enabled"
+  else
+    echo "   ⚠️  Could not enable Azure Monitor"
+  fi
 
-# Wait for Azure Monitor platform to initialize before creating filters
-echo "   Waiting for Azure Monitor to initialize..."
-sleep 10
+  # Wait for Azure Monitor platform to initialize before creating filters
+  echo "   Waiting for Azure Monitor to initialize..."
+  sleep 10
 
-# Delete any existing filters (default quickstart + previous runs)
-TOKEN=$(get_token)
-curl -s -o /dev/null -X DELETE "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters/quickstart_handler" \
-  -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || true
-curl -s -o /dev/null -X DELETE "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters/grubify-http-errors" \
-  -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || true
+  # Delete any existing filters (default quickstart + previous runs)
+  TOKEN=$(get_token)
+  curl -s -o /dev/null -X DELETE "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters/quickstart_handler" \
+    -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || true
+  curl -s -o /dev/null -X DELETE "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters/grubify-http-errors" \
+    -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || true
 
 # Create response plan with retry (Azure Monitor needs time to be ready)
 FILTER_CREATED=false
@@ -235,10 +276,11 @@ for attempt in 1 2 3; do
     sleep 10
   fi
 done
-if [ "$FILTER_CREATED" = "false" ]; then
-  echo "   ⚠️  Response plan failed after 3 attempts (set up in portal: Builder → Subagent → Add incident trigger)"
+  if [ "$FILTER_CREATED" = "false" ]; then
+    echo "   ⚠️  Response plan failed after 3 attempts (set up in portal or run: ./scripts/post-provision.sh --retry)"
+  fi
+  rm -f /tmp/response-plan-resp.txt
 fi
-rm -f /tmp/response-plan-resp.txt
 echo ""
 
 # ── Step 4: GitHub integration (optional) ────────────────────────────────────
