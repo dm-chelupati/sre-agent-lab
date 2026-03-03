@@ -196,19 +196,18 @@ check_connector_exists() {
 echo "📚 Step 1/5: Uploading knowledge base..."
 TOKEN=$(get_token)
 
-# Build the list of KB files dynamically from knowledge-base/ directory
-KB_FILES=""
-KB_NAMES=""
-for f in ./knowledge-base/*.md; do
-  KB_FILES="${KB_FILES} -F files=@${f};type=text/plain"
-  KB_NAMES="${KB_NAMES} $(basename $f)"
-done
-
-HTTP_CODE=$(eval curl -s -o /dev/null -w "%{http_code}" \
+# Build curl args array dynamically from knowledge-base/ directory
+CURL_ARGS=(-s -o /dev/null -w "%{http_code}" \
   -X POST "${AGENT_ENDPOINT}/api/v1/AgentMemory/upload" \
   -H "Authorization: Bearer ${TOKEN}" \
-  -F "triggerIndexing=true" \
-  ${KB_FILES})
+  -F "triggerIndexing=true")
+KB_NAMES=""
+for f in ./knowledge-base/*.md; do
+  CURL_ARGS+=(-F "files=@${f};type=text/plain")
+  KB_NAMES="${KB_NAMES} $(basename "$f")"
+done
+
+HTTP_CODE=$(curl "${CURL_ARGS[@]}")
 
 if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
   echo "   ✅ Uploaded:${KB_NAMES}"
