@@ -28,6 +28,10 @@ CONTAINER_APP_URL=$(azd env get-value CONTAINER_APP_URL 2>/dev/null || echo "")
 CONTAINER_APP_NAME=$(azd env get-value CONTAINER_APP_NAME 2>/dev/null || echo "")
 ACR_NAME=$(azd env get-value AZURE_CONTAINER_REGISTRY_NAME 2>/dev/null || echo "")
 GITHUB_PAT_VALUE=$(azd env get-value GITHUB_PAT 2>/dev/null || echo "")
+# azd env get-value outputs error text when key is missing — clean it up
+if echo "$GITHUB_PAT_VALUE" | grep -q "ERROR\|not found"; then
+  GITHUB_PAT_VALUE=""
+fi
 export GITHUB_PAT_VALUE
 
 if [ -z "$AGENT_ENDPOINT" ] || [ -z "$AGENT_NAME" ]; then
@@ -156,7 +160,7 @@ HTTP_CODE=$(curl -s -o /tmp/response-plan-resp.txt -w "%{http_code}" \
   -H "Content-Type: application/json" \
   --data-binary '{"id":"grubify-http-errors","name":"Grubify HTTP 5xx Errors","priority":"3","titleContains":"5xx","handlingAgent":"incident-handler","agentMode":"autonomous","maxAttempts":3}')
 
-if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ]; then
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "409" ]; then
   echo "   ✅ Response plan → incident-handler"
 else
   echo "   ⚠️  Response plan HTTP ${HTTP_CODE} (set up in portal: Builder → Subagent → Add incident trigger)"
