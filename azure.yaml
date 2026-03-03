@@ -1,0 +1,14 @@
+# Azure Developer CLI (azd) template for SRE Agent Lab
+# Run: azd up
+name: sre-agent-lab
+metadata:
+  template: sre-agent-lab@1.0.0
+
+infra:
+  provider: bicep
+  path: infra
+
+hooks:
+  postprovision:
+    shell: sh
+    run: ./scripts/post-provision.sh
