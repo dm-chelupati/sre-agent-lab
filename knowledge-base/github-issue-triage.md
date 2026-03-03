@@ -10,16 +10,35 @@ Fetch all open issues from the repo. Focus on issues that are unassigned and unl
 
 ---
 
-## Step 2: Skip Already Triaged Issues
+## Step 2: Handle Each Issue Based on Current State
 
-For each issue, check if it's already been triaged:
+For each open issue, check its current state:
 
-- Look for a comment starting with "🤖 **Grubify SRE Agent Bot**"
-- Check if it has labels
+### Case A: Already triaged (bot comment + labels exist, no updates since)
+→ **Skip it** — already handled.
 
-**If both exist and issue hasn't been updated** → Skip it, already handled.
+### Case B: Has labels but NO bot comment
+This happens when another subagent (incident-handler or code-analyzer) created the issue with labels already applied. The issue is valid and already categorized.
 
-**Otherwise** → Triage it now.
+**Post an acknowledgment comment:**
+```
+🤖 **Grubify SRE Agent Bot**
+
+This issue has been reviewed. Labels are already applied and the team is looking into it.
+
+Issue summary: [brief summary from issue body]
+Current labels: [list existing labels]
+
+🔍 Status: **Under investigation by the team**
+```
+
+→ Do NOT change existing labels — they were set by the creating agent.
+
+### Case C: Has a bot comment but labels were removed or changed
+→ **Re-triage** — classify again following Step 3 below.
+
+### Case D: No labels, no bot comment (new untriaged issue)
+→ **Triage it** — continue to Step 3.
 
 ---
 
