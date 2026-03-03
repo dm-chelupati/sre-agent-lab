@@ -11,6 +11,7 @@ infra:
 services:
   grubify-api:
     project: ./src/grubify/GrubifyApi
+    language: docker
     host: containerapp
     docker:
       path: Dockerfile
