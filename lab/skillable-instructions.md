@@ -567,8 +567,10 @@ Everything below was configured automatically when you ran `azd up`:
 > - **Managed Resources**: Resource group IDs the agent monitors — Azure Monitor alerts from these RGs flow automatically
 > - **Knowledge Base**: Your team's runbooks, uploaded as files — the agent references them during investigations
 > - **Subagents**: Specialized agents with specific tools and instructions for different tasks
+> - **Agent Identity**: A managed identity assigned to the agent, granting it Reader/Monitoring/Log Analytics access to your Azure resources
 > - **MCP Connectors**: External tool integrations (GitHub, Datadog, etc.) using the Model Context Protocol
 > - **Response Plans**: Rules that match incoming alerts to subagents based on severity and title patterns
+> - **Scheduled Tasks**: Cron-based automation that runs a subagent on a schedule (e.g., triage issues every 12 hours)
 > - **Autonomous Mode**: The agent takes actions without requiring human approval
 
 ---
