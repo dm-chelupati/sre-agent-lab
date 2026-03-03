@@ -240,6 +240,50 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
 
     You should see a `200 OK` response.
 
+---
+
+### Step 6: Chat with Your Agent
+
+Before we break things, try a few prompts to see the agent in action. Start a **new chat** in the SRE Agent portal and try these:
+
+1. [] Ask about the app:
+
+    ```
+    What is the Grubify application? What container apps are running
+    in my resource group?
+    ```
+
+    The agent should query your Azure resources and describe the Grubify container app.
+
+1. [] Ask about the knowledge base:
+
+    ```
+    What runbooks do you have in your knowledge base? Summarize
+    the http-500-errors runbook.
+    ```
+
+    The agent should search your uploaded files and summarize the troubleshooting steps.
+
+1. [] Ask about monitoring:
+
+    ```
+    Check the health of the Grubify container app. Show me the
+    CPU and memory metrics for the last 30 minutes.
+    ```
+
+    The agent should run az CLI commands and KQL queries to pull live metrics.
+
+1. [] Ask about the app endpoint:
+
+    ```
+    What is the public endpoint URL for the Grubify frontend
+    container app?
+    ```
+
+    The agent should find the FQDN from the container app configuration.
+
+> [!Knowledge] These prompts demonstrate the agent's built-in tools: `RunAzCliReadCommands` for Azure resource queries, `QueryLogAnalyticsByWorkspaceId` for KQL, `QueryAppInsightsByResourceId` for telemetry, and `search_memory` for knowledge base search. All configured automatically by `azd up`.
+
 ===
 
 # Part 3: IT Persona — Incident Detection & Remediation
@@ -333,80 +377,61 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
     curl https://@lab.Variable(grubifyUrl)/health
     ```
 
-> [!Knowledge] **What just happened?** The entire investigation was autonomous. When you deployed with `azd up`, the Bicep template set `knowledgeGraphConfiguration.managedResources` to include your resource group. This means Azure Monitor alerts from that resource group automatically flow to the agent. The response plan you configured (Sev3 alerts containing "5xx") matched the incoming alert to the `incident-handler` subagent. That subagent used KQL queries from your runbook, searched memory for patterns, and applied remediation — all without human intervention.
+> [!Knowledge] **What just happened?** The entire investigation was autonomous. The response plan routes all Azure Monitor alerts from the managed resource group to the `incident-handler` subagent. That subagent used KQL queries from the knowledge base runbook, searched memory for patterns, checked metrics, and applied remediation — then created a GitHub issue documenting everything. All without human intervention.
 
 ===
 
-# Part 4: Developer Persona — Root Cause Analysis with Source Code
+# Part 4: Developer Persona — Deep Root Cause with Source Code
 
 > [!Alert] **This section requires a GitHub PAT.** If you did not provide one during setup, skip to **Part 6: Review & Cleanup**. You can also add GitHub now by running: `export GITHUB_PAT=<pat> && ./scripts/setup-github.sh`
 
-**Scenario:** You are a developer with access to the Grubify source code. You want the SRE Agent to find the root cause of production issues with code-level references.
+**Scenario:** The incident-handler subagent (Part 3) created a GitHub issue using only log analysis. Now use the **code-analyzer** subagent to create a RICHER issue that includes source code references. Compare the two issues to see the value of connecting source code.
 
-```
-                  Developer Persona Flow
-                  ======================
-
-  Developer ──▶ SRE Agent Chat
-                  ├── Searches GitHub repo (github_search_code)
-                  ├── Reads file contents (github_get_file_contents)
-                  ├── Checks recent commits (github_list_commits)
-                  ├── Correlates logs to code (file:line references)
-                  └── Suggests specific code fixes
-```
+> [!Knowledge] **What's different between the two subagents?**
+>
+> | | incident-handler (Part 3) | code-analyzer (Part 4) |
+> |:--|:--|:--|
+> | **Log analysis** | ✅ | ✅ |
+> | **Knowledge base** | ✅ | ✅ |
+> | **Source code search** | ❌ Told NOT to search code | ✅ Searches GitHub repo |
+> | **File:line references** | ❌ | ✅ |
+> | **Code fix suggestions** | ❌ | ✅ |
+> | **GitHub issue detail** | Basic (log evidence only) | Rich (code + logs + fix) |
 
 ---
 
-### Step 1: Ask the Agent to Analyze Code
+### Step 1: Investigate with Source Code
 
 1. [] In the SRE Agent portal, start a **new chat**.
 
-1. [] Ask the agent:
+1. [] Ask the agent to use the code-analyzer subagent:
 
     ```
-    Search the dm-chelupati/grubify repository for the cart API implementation.
-    How does the /api/cart endpoint handle memory? Is there anything that could
-    cause a memory leak? Show me the specific files and lines.
+    Use the code-analyzer subagent to investigate the Grubify app.
+    Check logs AND search the source code in dm-chelupati/grubify
+    to find the exact root cause of the memory issues. Correlate
+    log entries to specific code paths. Create a GitHub issue with
+    detailed findings including file:line references and a suggested fix.
     ```
 
-1. [] Observe:
-    - [] The agent uses `github_search_code` to find the cart implementation
-    - [] Returns **file:line references** pointing to in-memory storage code
-    - [] Identifies the lack of cache eviction or size limits
+1. [] Observe the ADDITIONAL steps compared to the incident-handler:
+    - [] **Source code search**: Searches the Grubify repo for cart API implementation
+    - [] **Code correlation**: Maps error logs to specific functions and files
+    - [] **File:line references**: Points to the exact code causing the memory leak
+    - [] **Fix suggestion**: Proposes a code change (e.g., add cache eviction, size limit)
 
 ---
 
-### Step 2: Correlate Production Issues to Code Changes
+### Step 2: Compare the Two GitHub Issues
 
-1. [] Ask the agent:
+1. [] Go to [github.com/dm-chelupati/grubify/issues](https://github.com/dm-chelupati/grubify/issues).
 
-    ```
-    What recent commits in dm-chelupati/grubify could have introduced
-    the memory leak we saw in the last incident? Check any changes
-    to the cart API or in-memory storage code.
-    ```
+1. [] Compare the two issues side by side:
 
-1. [] The agent cross-references commit history with the incident timeline.
+    - [] **Issue from incident-handler** (Part 3): Log-based analysis — "Memory pressure detected, container restarted, KQL evidence shows error spike at timestamp X"
+    - [] **Issue from code-analyzer** (Part 4): Same log evidence PLUS — "Root cause in `CartService.cs` line 45: in-memory dictionary grows unbounded. Suggested fix: add LRU eviction or max size limit"
 
----
-
-### Step 3: Deep Investigation
-
-1. [] Ask for a comprehensive root cause analysis:
-
-    ```
-    Do a deep investigation of the last incident. Cross-reference the
-    error logs from Log Analytics with the source code in
-    dm-chelupati/grubify. Find the exact root cause with file names,
-    line numbers, and a suggested fix.
-    ```
-
-1. [] Review the response for:
-    - [] Code references with file:line locations
-    - [] Log evidence correlated to specific code paths
-    - [] Actionable fix suggestions
-
-> [!Note] The **code-analyzer** subagent specializes in source code analysis. It has `github_search_code`, `github_get_file_contents`, and `github_list_commits` tools, allowing it to build context from both past incidents and current source code.
+> [!Knowledge] **The delta is clear:** Adding source code search to the investigation takes the agent from "what happened" (logs) to "why it happened and how to fix it" (code). Same tools, different instructions — the code-analyzer subagent is instructed to search source code and provide code-level fixes, producing significantly richer findings.
 
 ===
 
