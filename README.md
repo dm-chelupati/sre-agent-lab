@@ -145,7 +145,7 @@ sre-agent-lab/
 
 ## Regions
 
-SRE Agent is available in: `eastus2`, `swedencentral`, `uksouth`, `australiaeast`
+SRE Agent is available in: `eastus2`, `swedencentral`, `australiaeast`
 
 ## License
 
