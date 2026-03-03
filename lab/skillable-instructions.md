@@ -227,7 +227,7 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
 1. [] In your terminal, check the app is running:
 
     ```
-    curl https://@lab.Variable(grubifyUrl)/weatherforecast
+    curl https://@lab.Variable(grubifyUrl)/api/restaurants
     ```
 
     You should see a JSON response with weather data.
@@ -391,7 +391,7 @@ Before we break things, try a few prompts to see the agent in action.
 1. [] Once the agent confirms the app is back, verify it yourself:
 
     ```
-    curl https://@lab.Variable(grubifyUrl)/weatherforecast
+    curl https://@lab.Variable(grubifyUrl)/api/restaurants
     ```
 
     - [] You should get a JSON response — the app is healthy again!
@@ -481,7 +481,7 @@ This sends another burst of requests to the cart API, triggering new 500 errors 
 1. [] Confirm the app is back yourself:
 
     ```
-    curl https://@lab.Variable(grubifyUrl)/weatherforecast
+    curl https://@lab.Variable(grubifyUrl)/api/restaurants
     ```
 
     - [] You should get a JSON response — the app is healthy again!
