@@ -534,13 +534,27 @@ Everything below was configured automatically when you ran `azd up`:
 
 ## Cleanup
 
-1. [] When finished, tear down all Azure resources:
+1. [] Tear down all Azure resources:
 
     ```
     azd down --purge
     ```
 
-> [!Alert] This **permanently deletes** all Azure resources created during the lab. Make sure you have saved any notes or screenshots before proceeding.
+1. [] Delete the SRE Agent resource (not removed by azd down):
+
+    ```
+    az resource delete --ids $(az resource list --resource-group rg-$(azd env get-value AZURE_ENV_NAME) --resource-type Microsoft.App/agents --query "[0].id" -o tsv) 2>/dev/null
+    ```
+
+1. [] Delete the resource group if it still exists:
+
+    ```
+    az group delete --name rg-$(azd env get-value AZURE_ENV_NAME) --yes --no-wait
+    ```
+
+> [!Alert] This **permanently deletes** all Azure resources. Make sure you have saved any notes or screenshots before proceeding.
+
+> [!Note] `azd down` does not currently recognize the `Microsoft.App/agents` resource type, so the SRE Agent must be deleted separately.
 
 ===
 
