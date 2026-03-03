@@ -206,6 +206,83 @@ else
 fi
 echo ""
 
+# ── Verification: Show what was set up ────────────────────────────────────────
+echo ""
+echo "============================================="
+echo "  📋 Verifying what was provisioned..."
+echo "============================================="
+echo ""
+TOKEN=$(get_token)
+
+# KB files
+echo "  📚 Knowledge Base:"
+KB_FILES=$(curl -s "${AGENT_ENDPOINT}/api/v1/AgentMemory/files" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
+echo "$KB_FILES" | python3 -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    for f in d.get('files',[]):
+        status='✅' if f.get('isIndexed') else '⏳'
+        print(f'     {status} {f[\"name\"]}')
+    if not d.get('files'): print('     (none)')
+except: print('     (could not retrieve)')
+" 2>/dev/null
+echo ""
+
+# Subagents
+echo "  🤖 Subagents:"
+AGENTS=$(curl -s "${AGENT_ENDPOINT}/api/v2/extendedAgent/agents" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
+echo "$AGENTS" | python3 -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    for a in d.get('value',[]):
+        tools=a.get('properties',{}).get('tools',[]) or []
+        mcp=a.get('properties',{}).get('mcpTools',[]) or []
+        all_tools=tools+mcp
+        print(f'     ✅ {a[\"name\"]} ({len(all_tools)} tools)')
+    if not d.get('value'): print('     (none)')
+except: print('     (could not retrieve)')
+" 2>/dev/null
+echo ""
+
+# Connectors
+echo "  🔗 Connectors:"
+CONNECTORS=$(az rest --method GET --url "https://management.azure.com${AGENT_RESOURCE_ID}/DataConnectors?api-version=${API_VERSION}" --query "value[].{name:name,state:properties.provisioningState}" -o json 2>/dev/null || echo "[]")
+echo "$CONNECTORS" | python3 -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    for c in d:
+        state='✅' if c.get('state')=='Succeeded' else '⏳ '+str(c.get('state',''))
+        print(f'     {state} {c[\"name\"]}')
+    if not d: print('     (none — GitHub PAT not provided or connector pending)')
+except: print('     (could not retrieve)')
+" 2>/dev/null
+echo ""
+
+# Response plans
+echo "  🚨 Response Plans:"
+FILTERS=$(curl -s "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
+echo "$FILTERS" | python3 -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    for f in d:
+        agent=f.get('handlingAgent','(none)')
+        name=f.get('id','?')
+        print(f'     ✅ {name} → subagent: {agent}')
+    if not d: print('     (none)')
+except: print('     (could not retrieve)')
+" 2>/dev/null
+echo ""
+
+# Incident platform
+echo "  📡 Incident Platform:"
+PLATFORM=$(curl -s "${AGENT_ENDPOINT}/api/v1/incidentPlayground/incidentPlatformType" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "unknown")
+echo "     ${PLATFORM}"
+echo ""
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo "============================================="
 echo "  ✅ SRE Agent Lab Setup Complete!"
@@ -215,5 +292,11 @@ echo "  🤖 Portal:  https://sre.azure.com"
 echo "  🌐 App:     ${CONTAINER_APP_URL}"
 echo "  📦 RG:      ${RESOURCE_GROUP}"
 echo ""
-echo "  Next: ./scripts/break-app.sh"
+echo "  👉 Go to https://sre.azure.com and explore:"
+echo "     1. Builder → Knowledge base (see uploaded runbooks)"
+echo "     2. Builder → Subagent builder (see subagents + tools)"
+echo "     3. Builder → Connectors (see GitHub MCP)"
+echo "     4. Settings → Incident platform (Azure Monitor)"
+echo ""
+echo "  Then run: ./scripts/break-app.sh"
 echo "============================================="
