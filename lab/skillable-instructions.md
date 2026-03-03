@@ -425,9 +425,8 @@ Before we break things, try a few prompts to see the agent in action.
 
     ```
     The Grubify API is not responding — specifically the "Add to Cart" 
-    endpoint (/api/cart/{userId}/items) is failing. Can you investigate, 
-    find the root cause in the source code at @lab.Variable(githubUser)/grubify, 
-    and create a GitHub issue with your detailed findings?
+    is failing. Can you investigate, find the root cause in the source 
+    code and create a GitHub issue with your detailed findings?
     ```
 
 1. [] Observe the ADDITIONAL steps compared to the incident-handler:
