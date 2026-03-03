@@ -135,6 +135,10 @@ echo ""
 echo "🚨 Step 3/4: Creating incident response plan..."
 TOKEN=$(get_token)
 
+# Delete any default quickstart handler that may conflict
+curl -s -o /dev/null -X DELETE "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters/quickstart_handler" \
+  -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || true
+
 HTTP_CODE=$(curl -s -o /tmp/response-plan-resp.txt -w "%{http_code}" \
   -X PUT "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters/grubify-http-errors" \
   -H "Authorization: Bearer ${TOKEN}" \
