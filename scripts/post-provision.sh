@@ -169,10 +169,17 @@ AGENT_RESOURCE_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_G
 API_VERSION="2025-05-01-preview"
 
 # Enable Azure Monitor as the incident platform (ARM PATCH)
-az rest --method PATCH \
+if az rest --method PATCH \
   --url "https://management.azure.com${AGENT_RESOURCE_ID}?api-version=${API_VERSION}" \
   --body '{"properties":{"incidentManagementConfiguration":{"type":"AzMonitor","connectionName":"azmonitor"}}}' \
-  --output none 2>/dev/null && echo "   ✅ Azure Monitor enabled" || echo "   ⚠️  Could not enable Azure Monitor"
+  --output none 2>&1; then
+  echo "   ✅ Azure Monitor enabled"
+else
+  echo "   ⚠️  Could not enable Azure Monitor"
+fi
+
+# Wait for Azure Monitor platform to initialize before creating filters
+sleep 5
 
 # Delete any existing filters (default quickstart + previous runs)
 TOKEN=$(get_token)
@@ -192,6 +199,7 @@ if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202
   echo "   ✅ Response plan → incident-handler"
 else
   echo "   ⚠️  Response plan HTTP ${HTTP_CODE} (set up in portal: Builder → Subagent → Add incident trigger)"
+  cat /tmp/response-plan-resp.txt 2>/dev/null | head -3
 fi
 rm -f /tmp/response-plan-resp.txt
 echo ""
@@ -328,8 +336,17 @@ echo ""
 
 # Incident platform
 echo "  📡 Incident Platform:"
-PLATFORM=$(curl -s "${AGENT_ENDPOINT}/api/v1/incidentPlayground/incidentPlatformType" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "unknown")
-echo "     ${PLATFORM}"
+PLATFORM_RAW=$(curl -s "${AGENT_ENDPOINT}/api/v1/incidentPlayground/incidentPlatformType" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "{}")
+echo "$PLATFORM_RAW" | python3 -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    ptype = d.get('incidentPlatformType', 'Unknown') if isinstance(d, dict) else str(d)
+    icon = '✅' if ptype == 'AzMonitor' else '⚠️'
+    display = {'AzMonitor': 'Azure Monitor', 'None': 'Not configured'}.get(ptype, ptype)
+    print(f'     {icon} {display}')
+except: print('     ⚠️  Could not determine')
+" 2>/dev/null
 echo ""
 
 # ── Summary ──────────────────────────────────────────────────────────────────
