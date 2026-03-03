@@ -41,6 +41,35 @@ azd up
 
 Deployment takes ~8-12 minutes. When complete, you'll see the SRE Agent portal URL and Grubify app URL.
 
+## Post-Deployment: Retry & Update
+
+After the initial `azd up`, you can re-run the post-provision script to update configs without redeploying infrastructure:
+
+```bash
+# Re-run full setup (rebuilds container images + re-uploads everything)
+./scripts/post-provision.sh
+
+# Skip container image builds (just update KB, subagents, response plan)
+./scripts/post-provision.sh --retry
+
+# Skip builds only (still re-creates everything from scratch)
+./scripts/post-provision.sh --skip-build
+```
+
+### `--retry` vs `--skip-build`
+
+| Flag | Container Build | KB Upload | Subagents | Response Plan |
+|------|----------------|-----------|-----------|---------------|
+| *(none)* | Yes | Yes | Yes (upsert) | Yes |
+| `--skip-build` | **Skip** | Yes | Yes (upsert) | Yes |
+| `--retry` | **Skip** | Yes (always) | Yes (upsert) | **Skip if exists** |
+
+**Common scenarios:**
+- **Changed a subagent prompt or KB file?** → `./scripts/post-provision.sh --retry`
+- **Added a new KB file to `knowledge-base/`?** → `./scripts/post-provision.sh --retry` (auto-discovers all `*.md` files)
+- **Changed container app code?** → `./scripts/post-provision.sh` (full rebuild)
+- **Response plan 405 error?** → Wait 30s and run `./scripts/post-provision.sh --retry`
+
 ## What Gets Deployed
 
 | Component | Azure Service | Purpose |
@@ -52,11 +81,11 @@ Deployment takes ~8-12 minutes. When complete, you'll see the SRE Agent portal U
 | Alert Rules | `Microsoft.Insights/metricAlerts` | HTTP 5xx and error alerts |
 | Managed Identity | `Microsoft.ManagedIdentity` | Reader access for agent |
 
-**Post-provision (automated via srectl):**
-- Knowledge base: HTTP error runbook + app architecture doc
-- Incident handler subagent with search memory
+**Post-provision (automated via REST API):**
+- Knowledge base: HTTP error runbook + app architecture doc + incident report template
+- Incident handler subagent with diagnostic tools
 - Incident response plan for HTTP 500 alerts
-- (If GitHub PAT) GitHub MCP connector + code-analyzer + issue-triager subagents
+- (If GitHub PAT) GitHub MCP connector + code-analyzer + issue-triager subagents + scheduled triage task
 
 ## Lab Scenarios
 
@@ -125,7 +154,8 @@ sre-agent-lab/
 ├── knowledge-base/
 │   ├── http-500-errors.md          # HTTP error investigation runbook
 │   ├── grubify-architecture.md     # App architecture reference
-│   └── github-issue-triage.md     # Issue triage runbook (GitHub)
+│   ├── incident-report-template.md # GitHub issue formatting template
+│   └── github-issue-triage.md      # Issue triage runbook (GitHub)
 ├── sre-config/
 │   ├── connectors/
 │   │   └── github-mcp.yaml        # GitHub MCP connector
@@ -136,6 +166,7 @@ sre-agent-lab/
 │       └── issue-triager.yaml           # Triage persona subagent
 ├── scripts/
 │   ├── post-provision.sh           # azd postprovision hook
+│   ├── yaml-to-api-json.py         # Converts YAML agent specs to API JSON
 │   ├── break-app.sh                # Fault injection script
 │   ├── setup-github.sh             # Add GitHub integration later
 │   └── create-sample-issues.sh     # Create triage test issues
