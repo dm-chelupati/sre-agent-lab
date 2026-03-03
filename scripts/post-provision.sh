@@ -50,6 +50,7 @@ if [ -n "$ACR_NAME" ] && [ -d "$PROJECT_DIR/src/grubify/GrubifyApi" ]; then
   ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv 2>/dev/null)
   IMAGE_TAG="${ACR_LOGIN_SERVER}/grubify-api:latest"
 
+  echo "   Building API image in ACR (this takes ~1 min)..."
   az acr build \
     --registry "$ACR_NAME" \
     --image "grubify-api:latest" \
@@ -60,6 +61,7 @@ if [ -n "$ACR_NAME" ] && [ -d "$PROJECT_DIR/src/grubify/GrubifyApi" ]; then
   echo "   ✅ Built: ${IMAGE_TAG}"
 
   # Update the container app to use the new image
+  echo "   Deploying API to container app..."
   az containerapp update \
     --name "$CONTAINER_APP_NAME" \
     --resource-group "$RESOURCE_GROUP" \
@@ -77,6 +79,7 @@ if [ -n "$ACR_NAME" ] && [ -d "$PROJECT_DIR/src/grubify/GrubifyApi" ]; then
   if [ -d "$PROJECT_DIR/src/grubify/grubify-frontend" ]; then
     FRONTEND_IMAGE="${ACR_LOGIN_SERVER}/grubify-frontend:latest"
 
+    echo "   Building frontend image in ACR (this takes ~2-3 min)..."
     az acr build \
       --registry "$ACR_NAME" \
       --image "grubify-frontend:latest" \
@@ -84,6 +87,8 @@ if [ -n "$ACR_NAME" ] && [ -d "$PROJECT_DIR/src/grubify/GrubifyApi" ]; then
       "$PROJECT_DIR/src/grubify/grubify-frontend" \
       --no-logs --output none 2>/dev/null
 
+    echo "   ✅ Frontend built"
+    echo "   Deploying frontend to container app..."
     az containerapp update \
       --name "$FRONTEND_APP_NAME" \
       --resource-group "$RESOURCE_GROUP" \
