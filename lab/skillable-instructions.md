@@ -504,23 +504,19 @@ This sends another burst of requests to the cart API, triggering new 500 errors 
 
 ---
 
-### Step 2: Triage via Chat
+### Step 2: Run the Triage Task
 
-1. [] In the SRE Agent portal, start a **new chat**.
+1. [] In the SRE Agent portal, go to **Builder → Scheduled tasks**.
 
-1. [] Ask the agent:
+1. [] Find the **triage-grubify-issues** task.
 
-    ```
-    Use the issue-triager subagent to triage all open issues in
-    @lab.Variable(githubUser)/grubify. For each issue, classify it, add appropriate
-    labels, and post a triage comment following the triage runbook.
-    ```
+1. [] Click **Run task now** to trigger it immediately.
 
 1. [] Watch the agent:
     - [] Lists open issues from the repository
-    - [] Reads each issue and classifies it (Bug, Documentation, Feature Request)
-    - [] Adds labels (bug, needs-more-info, etc.)
-    - [] Posts a triage comment starting with "🤖 **SRE Agent Triage Bot**"
+    - [] Reads each issue and classifies it (Bug, Performance, Feature Request, Question)
+    - [] Adds labels (bug, api-bug, memory-leak, severity-high, etc.)
+    - [] Posts a triage comment starting with "🤖 **Grubify SRE Agent Bot**"
 
 ---
 
@@ -529,18 +525,10 @@ This sends another burst of requests to the cart API, triggering new 500 errors 
 1. [] Go back to [github.com/@lab.Variable(githubUser)/grubify/issues](https://github.com/@lab.Variable(githubUser)/grubify/issues).
 
 1. [] Verify the issues now have:
-    - [] **Labels** applied (bug, needs-more-info, etc.)
-    - [] A **triage comment** from the agent
+    - [] **Labels** applied (bug, api-bug, memory-leak, severity-high, etc.)
+    - [] A **triage comment** from the agent starting with "🤖 **Grubify SRE Agent Bot**"
 
----
-
-### Step 4: Check the Scheduled Task
-
-1. [] In the SRE Agent portal, go to **Builder → Scheduled tasks**.
-
-1. [] You should see **triage-grubify-issues** running every 12 hours.
-
-> [!Knowledge] The scheduled task was created by `azd up`. It runs the issue-triager subagent automatically twice a day, so new issues get triaged without anyone manually triggering it. You can also click **Run task now** to trigger it immediately.
+> [!Knowledge] The scheduled task was created by `azd up`. It runs the issue-triager subagent automatically every 12 hours, so new issues get triaged without anyone manually triggering it.
 
 ===
 
