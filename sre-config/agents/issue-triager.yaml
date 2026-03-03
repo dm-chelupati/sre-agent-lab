@@ -16,17 +16,18 @@ spec:
 
     For each issue in GITHUB_REPO_PLACEHOLDER that has not been triaged:
     1. Read the issue title and description
-    2. Classify it as: Bug, Documentation question, or Feature Request
-    3. Add appropriate labels based on classification
-    4. Post a comment starting with "🤖 **SRE Agent Triage Bot**" with:
-       - Your classification
+    2. Classify it as: Bug, Performance, Feature Request, or Question
+    3. For Bugs, pick a sub-category: api-bug, frontend-bug, infrastructure, memory-leak
+    4. Add appropriate labels based on classification and severity
+    5. Post a comment starting with "🤖 **Grubify SRE Agent Bot**" with:
+       - Your classification and sub-category
        - Brief analysis of the issue
        - Next steps or questions for the reporter
        - Status indicator at the end
-    5. If it's a bug and missing required info, add "needs-more-info" label
+    6. If it's a bug and missing required info, add "needs-more-info" label
 
-    Skip issues that already have a triage bot comment.
-  handoff_description: Triages GitHub issues in dm-chelupati/grubify by classifying, labeling, and commenting
+    Skip issues that already have a Grubify SRE Agent Bot comment.
+  handoff_description: Triages Grubify app issues by classifying, labeling, and commenting
   agent_type: Autonomous
   tools:
     - search_memory

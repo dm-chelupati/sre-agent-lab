@@ -14,7 +14,7 @@ Fetch all open issues from the repo. Focus on issues that are unassigned and unl
 
 For each issue, check if it's already been triaged:
 
-- Look for a comment starting with "🤖 **SRE Agent Triage Bot**"
+- Look for a comment starting with "🤖 **Grubify SRE Agent Bot**"
 - Check if it has labels
 
 **If both exist and issue hasn't been updated** → Skip it, already handled.
@@ -58,7 +58,7 @@ Read the title and description. Pick ONE category:
 
 **Post comment:**
 ```
-🤖 **SRE Agent Triage Bot**
+🤖 **Grubify SRE Agent Bot**
 
 Thanks for reporting this issue with Grubify. To investigate, we need:
 - [list what's missing]
@@ -72,7 +72,7 @@ Thanks for reporting this issue with Grubify. To investigate, we need:
 
 **Post comment:**
 ```
-🤖 **SRE Agent Triage Bot**
+🤖 **Grubify SRE Agent Bot**
 
 Thanks for the details. This bug report is ready for investigation.
 
@@ -97,7 +97,7 @@ Severity: [Critical / High / Medium / Low]
 
 **Post comment:**
 ```
-🤖 **SRE Agent Triage Bot**
+🤖 **Grubify SRE Agent Bot**
 
 Performance issue identified.
 
@@ -115,7 +115,7 @@ Recommended investigation: [Check metrics / Review logs / Load test]
 
 **Post comment:**
 ```
-🤖 **SRE Agent Triage Bot**
+🤖 **Grubify SRE Agent Bot**
 
 Thanks for the suggestion for Grubify!
 
@@ -133,7 +133,7 @@ Thanks for the suggestion for Grubify!
 
 **Post comment:**
 ```
-🤖 **SRE Agent Triage Bot**
+🤖 **Grubify SRE Agent Bot**
 
 [Answer the question based on the grubify-architecture knowledge base document]
 
@@ -164,7 +164,7 @@ Thanks for the suggestion for Grubify!
 
 ## Comment Template
 
-Always start with: `🤖 **SRE Agent Triage Bot**`
+Always start with: `🤖 **Grubify SRE Agent Bot**`
 
 Always end with a status line:
 - `⚠️ Status: **Waiting for info from user**`
