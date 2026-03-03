@@ -379,8 +379,7 @@ Before we break things, try a few prompts to see the agent in action.
 1. [] In the same incident thread, type the following in the chat:
 
     ```
-    Can you mitigate this issue? Restart the container app to clear 
-    the memory leak and verify the app is responding again.
+    Can you mitigate this issue?
     ```
 
 1. [] Watch the agent take action:
@@ -459,9 +458,7 @@ Before we break things, try a few prompts to see the agent in action.
 1. [] Ask the agent to fix the issue:
 
     ```
-    The Grubify cart API has a memory leak causing OOM crashes.
-    Can you mitigate it by restarting the container app and 
-    verifying the app is healthy again?
+    Can you mitigate the Grubify cart API memory leak issue?
     ```
 
 1. [] Watch the agent:
