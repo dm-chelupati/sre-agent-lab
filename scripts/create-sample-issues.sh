@@ -7,6 +7,9 @@
 #   - 5 Bug reports (1 onboarding, 1 AI, 1 non-AI, 1 incomplete, 1 integration)
 #   - 2 Feature requests
 #
+# Requires: GitHub PAT with 'repo' scope (Classic token) or
+#   'Issues: Read and Write' permission (Fine-grained token)
+#
 # Usage:
 #   export GITHUB_PAT=<your-github-pat>
 #   ./scripts/create-sample-issues.sh <owner/repo>

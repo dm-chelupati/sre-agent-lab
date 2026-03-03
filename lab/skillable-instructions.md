@@ -246,7 +246,7 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
 
 > [!Knowledge] **This is the core lab — no GitHub required.**
 
-**Scenario:** You are an SRE/Ops engineer. The Grubify application starts returning HTTP 500 errors. Azure Monitor fires an alert. The SRE Agent automatically investigates using logs, knowledge base, and memory — then remediates the issue.
+**Scenario:** You are an SRE/Ops engineer. The Grubify application starts experiencing memory pressure from a cart API memory leak. Azure Monitor fires alerts for high memory usage and container restarts. The SRE Agent automatically investigates using logs, knowledge base, and memory — then remediates the issue.
 
 ```
                   IT Persona Flow
@@ -254,18 +254,26 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
 
   You (run script)                           SRE Agent
   ──────────────                             ─────────
-  1. Enable chaos mode ────▶ Grubify App ────▶ HTTP 500 errors
-                                   │
-                                   ▼
-                            Azure Monitor ────▶ Alert fires (5xx spike)
-                                   │
-                                   ▼ (auto-flow)
-                             SRE Agent investigates:
-                               ├── Searches memory for similar incidents
-                               ├── Queries Log Analytics (KQL)
-                               ├── Checks knowledge base (runbook)
-                               ├── Applies remediation (restart/scale)
-                               └── Shows investigation summary
+  1. Flood cart API ———————▶ Grubify App ————▶ Memory grows
+     (POST /api/cart)                │              │
+                                     │              ▼
+                                     │        OOM / 500 errors
+                                     │
+                                     ▼
+                              Azure Monitor ————▶ Alerts fire:
+                                     │            • High memory (>80%)
+                                     │            • Container restarts
+                                     │            • HTTP 5xx errors
+                                     ▼ (auto-flow)
+                               SRE Agent investigates:
+                                 ├── Searches memory for similar incidents
+                                 ├── Queries Log Analytics (KQL)
+                                 │    • Memory metrics over time
+                                 │    • OOM / restart events
+                                 │    • Error logs + stack traces
+                                 ├── Checks knowledge base (runbook)
+                                 ├── Applies remediation (restart/scale)
+                                 └── Shows investigation summary
 ```
 
 ---
@@ -279,11 +287,12 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
     ```
 
     This script:
-    - Enables chaos mode on the Grubify app
-    - Sends 50 HTTP requests that return 500 errors
-    - Prints the results
+    - Floods the `/api/cart/demo-user/items` endpoint with rapid POST requests
+    - Each request adds items to an in-memory cart, causing memory to grow
+    - Eventually the container hits its 1Gi memory limit → OOM kill → restarts
+    - Azure Monitor fires alerts for high memory, container restarts, and HTTP errors
 
-> [!Alert] After running the script, **wait 5-8 minutes** for Azure Monitor to fire the alert and the SRE Agent to pick it up. This is the time it takes for Azure Monitor to evaluate the metric alert rule.
+> [!Alert] After running the script, **wait 5-8 minutes** for Azure Monitor to fire the alert and the SRE Agent to pick it up. The memory leak takes a few minutes to build up enough pressure to trigger alerts.
 
 ---
 
@@ -300,11 +309,12 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
 1. [] Observe the agent's workflow:
 
     - [] **Memory search**: The agent searches for similar past incidents
-    - [] **Log analysis**: Queries Log Analytics for error patterns and stack traces using KQL
-    - [] **Knowledge base**: References the http-500-errors.md runbook for troubleshooting steps
-    - [] **Metrics check**: Analyzes CPU/memory metrics to rule out resource exhaustion
-    - [] **Remediation**: Takes corrective action (restart container revision, scale out)
-    - [] **Summary**: Provides root cause analysis with evidence and actions taken
+    - [] **Log analysis**: Queries Log Analytics for memory pressure indicators, OOM events, and error logs
+    - [] **Metrics check**: Analyzes container memory usage trends (WorkingSetBytes rising over time)
+    - [] **Knowledge base**: References the http-500-errors.md runbook for memory leak diagnosis steps
+    - [] **Root cause**: Identifies the `/api/cart` endpoint accumulating data without eviction
+    - [] **Remediation**: Takes corrective action (restart container revision, scale up memory)
+    - [] **Summary**: Provides root cause analysis with evidence (memory timeline, error logs, KQL queries)
 
 ---
 
@@ -354,14 +364,15 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
 1. [] Ask the agent:
 
     ```
-    Search the dm-chelupati/grubify repository for error handling code.
-    What could cause HTTP 500 errors? Show me the specific files and lines.
+    Search the dm-chelupati/grubify repository for the cart API implementation.
+    How does the /api/cart endpoint handle memory? Is there anything that could
+    cause a memory leak? Show me the specific files and lines.
     ```
 
 1. [] Observe:
-    - [] The agent uses `github_search_code` to find error handling patterns
-    - [] Returns **file:line references** pointing to specific code
-    - [] Suggests improvements or fixes
+    - [] The agent uses `github_search_code` to find the cart implementation
+    - [] Returns **file:line references** pointing to in-memory storage code
+    - [] Identifies the lack of cache eviction or size limits
 
 ---
 
@@ -371,8 +382,8 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
 
     ```
     What recent commits in dm-chelupati/grubify could have introduced
-    the HTTP 500 errors we saw in the last incident? Correlate the
-    production error logs with the source code.
+    the memory leak we saw in the last incident? Check any changes
+    to the cart API or in-memory storage code.
     ```
 
 1. [] The agent cross-references commit history with the incident timeline.

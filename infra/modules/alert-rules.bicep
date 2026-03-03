@@ -72,6 +72,80 @@ resource http5xxAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = {
 }
 
 // ============================================================
+// Metric Alert: High memory usage on Container App
+// ============================================================
+resource memoryAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = {
+  name: 'alert-high-memory-${environmentName}'
+  location: 'global'
+  properties: {
+    description: 'Alert when Grubify container memory usage exceeds 80%'
+    severity: 2
+    enabled: true
+    scopes: [
+      containerAppId
+    ]
+    evaluationFrequency: 'PT1M'
+    windowSize: 'PT5M'
+    criteria: {
+      'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
+      allOf: [
+        {
+          name: 'highMemory'
+          metricName: 'WorkingSetBytes'
+          metricNamespace: 'microsoft.app/containerapps'
+          operator: 'GreaterThan'
+          threshold: 858993459 // ~800Mi (80% of 1Gi)
+          timeAggregation: 'Average'
+          criterionType: 'StaticThresholdCriterion'
+        }
+      ]
+    }
+    actions: [
+      {
+        actionGroupId: actionGroup.id
+      }
+    ]
+  }
+}
+
+// ============================================================
+// Metric Alert: Container restarts (OOM kills)
+// ============================================================
+resource restartAlert 'Microsoft.Insights/metricAlerts@2018-03-01' = {
+  name: 'alert-container-restarts-${environmentName}'
+  location: 'global'
+  properties: {
+    description: 'Alert when Grubify container restarts (possible OOM)'
+    severity: 2
+    enabled: true
+    scopes: [
+      containerAppId
+    ]
+    evaluationFrequency: 'PT1M'
+    windowSize: 'PT5M'
+    criteria: {
+      'odata.type': 'Microsoft.Azure.Monitor.SingleResourceMultipleMetricCriteria'
+      allOf: [
+        {
+          name: 'restarts'
+          metricName: 'RestartCount'
+          metricNamespace: 'microsoft.app/containerapps'
+          operator: 'GreaterThan'
+          threshold: 0
+          timeAggregation: 'Total'
+          criterionType: 'StaticThresholdCriterion'
+        }
+      ]
+    }
+    actions: [
+      {
+        actionGroupId: actionGroup.id
+      }
+    ]
+  }
+}
+
+// ============================================================
 // Log Alert: Error-level log entries
 // ============================================================
 resource logErrorAlert 'Microsoft.Insights/scheduledQueryRules@2023-03-15-preview' = {
