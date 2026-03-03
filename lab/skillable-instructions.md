@@ -181,12 +181,13 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
 
 1. [] Select **Knowledge base**.
 
-1. [] Verify you see **2 files** uploaded:
+1. [] Verify you see uploaded files:
 
     | File | Purpose |
     |:-----|:--------|
     | **http-500-errors.md** | HTTP error troubleshooting runbook with KQL queries |
     | **grubify-architecture.md** | App architecture, endpoints, scaling config |
+    | **github-issue-triage.md** | Grubify app issue triage runbook (if GitHub configured) |
 
 > [!Note] These files were uploaded automatically by the post-provision script using `srectl doc upload`. The agent references YOUR runbooks during investigations — not generic advice.
 
