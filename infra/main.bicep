@@ -32,10 +32,13 @@ module resources 'resources.bicep' = {
 // Outputs consumed by azd and post-provision script
 output AZURE_RESOURCE_GROUP string = rg.name
 output AZURE_LOCATION string = location
+output AZURE_CONTAINER_REGISTRY_ENDPOINT string = resources.outputs.acrLoginServer
+output AZURE_CONTAINER_REGISTRY_NAME string = resources.outputs.acrName
 output SRE_AGENT_NAME string = resources.outputs.agentName
 output SRE_AGENT_ENDPOINT string = resources.outputs.agentEndpoint
 output AGENT_PORTAL_URL string = resources.outputs.agentPortalUrl
 output CONTAINER_APP_URL string = resources.outputs.containerAppUrl
 output CONTAINER_APP_NAME string = resources.outputs.containerAppName
+output CONTAINER_APP_ENV_NAME string = resources.outputs.containerAppEnvName
 output LOG_ANALYTICS_WORKSPACE_ID string = resources.outputs.logAnalyticsWorkspaceId
 output APP_INSIGHTS_CONNECTION_STRING string = resources.outputs.appInsightsConnectionString

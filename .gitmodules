@@ -1,0 +1,3 @@
+[submodule "src/grubify"]
+	path = src/grubify
+	url = https://github.com/dm-chelupati/grubify.git

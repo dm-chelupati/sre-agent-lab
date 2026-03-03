@@ -8,6 +8,15 @@ infra:
   provider: bicep
   path: infra
 
+services:
+  grubify-api:
+    project: ./src/grubify/GrubifyApi
+    language: dotnet
+    host: containerapp
+    docker:
+      path: ./src/grubify/GrubifyApi/Dockerfile
+      context: ./src/grubify/GrubifyApi
+
 hooks:
   postprovision:
     shell: sh
