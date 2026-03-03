@@ -6,6 +6,23 @@
 ## Scope
 Azure Container Apps endpoints returning HTTP 500 errors. Logs stored in Log Analytics Workspace.
 
+## Valid Azure Monitor Metric Names for Container Apps
+**IMPORTANT: Use ONLY these metric names with `az monitor metrics list`:**
+- `UsageNanoCores` — CPU usage (NOT CpuUsage, NOT CPUUsage)
+- `WorkingSetBytes` — Memory usage (NOT MemoryUsage, NOT MemoryWorkingSet)
+- `Requests` — HTTP request count
+- `RestartCount` — Container restarts (OOM indicator)
+- `Replicas` — Active replica count
+- `CpuPercentage` — CPU percentage
+- `MemoryPercentage` — Memory percentage
+
+## Container App Logs CLI
+**Use `az containerapp logs show` with `--tail` (NOT `--since`):**
+```bash
+az containerapp logs show -g <resourceGroup> -n <appName> --tail 300
+az containerapp logs show -g <resourceGroup> -n <appName> --tail 300 --format text
+```
+
 ---
 
 ## Phase 1: CPU and Memory Metrics (Check First)
@@ -33,7 +50,7 @@ performanceCounters
 AzureMetrics
 | where TimeGenerated > ago(1h)
 | where ResourceProvider == "MICROSOFT.APP"
-| where MetricName in ("CpuUsage", "MemoryUsage", "MemoryWorkingSetBytes")
+| where MetricName in ("UsageNanoCores", "WorkingSetBytes", "Requests", "RestartCount")
 | summarize AvgValue = avg(Average), MaxValue = max(Maximum) by bin(TimeGenerated, 5m), MetricName
 | order by TimeGenerated desc
 ```
