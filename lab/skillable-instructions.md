@@ -241,8 +241,8 @@ Before we break things, try a few prompts to see the agent in action. Start a **
 1. [] Ask how many container apps are deployed:
 
     ```
-    How many container apps are deployed for the Grubify application
-    in my resource group? List them with their endpoints.
+    How many container apps are deployed for the Grubify application?
+    List them with their endpoints.
     ```
 
     The agent should find both the API and frontend container apps and list their URLs.
