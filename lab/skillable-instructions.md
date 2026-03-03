@@ -240,14 +240,21 @@ Before we break things, try a few prompts to see the agent in action.
 
 > [!Alert] Always start a **new chat thread** for each prompt — do not use the welcome thread. Click the **+ New Chat** button in the SRE Agent portal.
 
-1. [] Ask about the deployed apps and get the frontend URL:
+1. [] Try one of these prompts (pick either one):
 
+    **Option A** — Ask about deployed resources:
     ```
     How many container apps are deployed for the Grubify application?
     List them with their endpoints.
     ```
 
-    The agent should find both the API and frontend container apps and list their URLs. Copy the frontend URL from the response.
+    **Option B** — Ask for the frontend URL:
+    ```
+    What is the public endpoint URL for the Grubify frontend
+    container app?
+    ```
+
+    The agent should find the container apps and return their URLs. Copy the frontend URL from the response.
 
 1. [] Open the Grubify app in your browser:
 
