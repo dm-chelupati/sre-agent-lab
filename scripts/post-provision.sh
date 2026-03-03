@@ -1,14 +1,12 @@
 #!/bin/bash
 # =============================================================================
-# Post-Provision Script for SRE Agent Lab
-# Runs automatically after 'azd provision' via the postprovision hook
+# post-provision.sh — Runs automatically after azd provision
 #
-# Configures:
-#   - srectl initialization
-#   - Knowledge base upload (http-500-errors.md + grubify-architecture.md)
-#   - Incident handler subagent
-#   - Incident response plan
-#   - (Optional) GitHub MCP connector + additional subagents if GITHUB_PAT is set
+# Configures the SRE Agent using REST APIs (no srectl dependency):
+#   - Uploads knowledge base files via dataplane API
+#   - Creates incident handler subagent via ARM API
+#   - Creates incident response plan via dataplane API
+#   - (Optional) Configures GitHub MCP + additional subagents
 # =============================================================================
 set -e
 
@@ -18,106 +16,170 @@ echo "  SRE Agent Lab — Post-Provision Setup"
 echo "============================================="
 echo ""
 
-# Get outputs from azd environment
-AGENT_ENDPOINT=$(azd env get-values 2>/dev/null | grep "^SRE_AGENT_ENDPOINT=" | cut -d'=' -f2 | tr -d '"')
-AGENT_NAME=$(azd env get-values 2>/dev/null | grep "^SRE_AGENT_NAME=" | cut -d'=' -f2 | tr -d '"')
-RESOURCE_GROUP=$(azd env get-values 2>/dev/null | grep "^AZURE_RESOURCE_GROUP=" | cut -d'=' -f2 | tr -d '"')
-CONTAINER_APP_URL=$(azd env get-values 2>/dev/null | grep "^CONTAINER_APP_URL=" | cut -d'=' -f2 | tr -d '"')
-GITHUB_PAT_VALUE=$(azd env get-values 2>/dev/null | grep "^GITHUB_PAT=" | cut -d'=' -f2 | tr -d '"')
+# ── Read azd outputs ─────────────────────────────────────────────────────────
+AGENT_ENDPOINT=$(azd env get-value SRE_AGENT_ENDPOINT 2>/dev/null || echo "")
+AGENT_NAME=$(azd env get-value SRE_AGENT_NAME 2>/dev/null || echo "")
+RESOURCE_GROUP=$(azd env get-value AZURE_RESOURCE_GROUP 2>/dev/null || echo "")
+CONTAINER_APP_URL=$(azd env get-value CONTAINER_APP_URL 2>/dev/null || echo "")
+SUBSCRIPTION_ID=$(az account show --query id -o tsv 2>/dev/null || echo "")
+GITHUB_PAT_VALUE=$(azd env get-value GITHUB_PAT 2>/dev/null || echo "")
 
-# Check GITHUB_PAT from env var if not in azd env
-if [ -z "$GITHUB_PAT_VALUE" ] && [ -n "$GITHUB_PAT" ]; then
-  GITHUB_PAT_VALUE="$GITHUB_PAT"
+if [ -z "$AGENT_ENDPOINT" ] || [ -z "$AGENT_NAME" ]; then
+  echo "❌ ERROR: Could not read agent details from azd environment."
+  echo "   Make sure Bicep deployment completed successfully."
+  exit 1
 fi
 
-echo "Agent Endpoint: ${AGENT_ENDPOINT}"
-echo "Agent Name:     ${AGENT_NAME}"
-echo "Resource Group: ${RESOURCE_GROUP}"
+echo "📡 Agent endpoint: ${AGENT_ENDPOINT}"
+echo "🤖 Agent name:     ${AGENT_NAME}"
+echo "📦 Resource group:  ${RESOURCE_GROUP}"
+echo "🔑 Subscription:   ${SUBSCRIPTION_ID}"
 echo ""
 
-# ---- Step 1: Initialize srectl ----
-echo "Step 1/5: Initializing srectl..."
-srectl init --resource-url "${AGENT_ENDPOINT}"
-echo "  ✓ srectl initialized"
+# ── Helper: Get bearer token for SRE Agent dataplane ─────────────────────────
+get_token() {
+  az account get-access-token --resource https://azuresre.dev/.default --query accessToken -o tsv 2>/dev/null
+}
+
+# ARM resource ID for the agent
+AGENT_RESOURCE_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.App/agents/${AGENT_NAME}"
+API_VERSION="2025-05-01-preview"
+
+# ── Step 1: Upload knowledge base files ──────────────────────────────────────
+echo "📚 Step 1/4: Uploading knowledge base files..."
+TOKEN=$(get_token)
+
+curl -s -X POST "${AGENT_ENDPOINT}/api/v1/AgentMemory/upload" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -F "triggerIndexing=true" \
+  -F "files=@./knowledge-base/http-500-errors.md;type=text/plain" \
+  -F "files=@./knowledge-base/grubify-architecture.md;type=text/plain" \
+  > /dev/null 2>&1
+
+echo "   ✅ Uploaded: http-500-errors.md"
+echo "   ✅ Uploaded: grubify-architecture.md"
 echo ""
 
-# ---- Step 2: Upload knowledge base ----
-echo "Step 2/5: Uploading knowledge base..."
-srectl doc upload --file ./knowledge-base/http-500-errors.md
-echo "  ✓ Uploaded http-500-errors.md"
-srectl doc upload --file ./knowledge-base/grubify-architecture.md
-echo "  ✓ Uploaded grubify-architecture.md"
-echo ""
+# ── Step 2: Create incident-handler subagent ─────────────────────────────────
+echo "🤖 Step 2/4: Creating incident-handler subagent..."
 
-# ---- Step 3: Create incident handler subagent ----
-echo "Step 3/5: Creating incident handler subagent..."
+# Choose the right config based on GitHub availability
 if [ -n "$GITHUB_PAT_VALUE" ]; then
-  echo "  GitHub PAT detected — using full config (with GitHub tools)"
-  srectl agent apply -f sre-config/agents/incident-handler-full.yaml
+  echo "   GitHub PAT detected — using full config"
+  SUBAGENT_YAML="sre-config/agents/incident-handler-full.yaml"
 else
-  echo "  No GitHub PAT — using core config (log analysis only)"
-  srectl agent apply -f sre-config/agents/incident-handler-core.yaml
+  echo "   No GitHub PAT — using core config (log analysis only)"
+  SUBAGENT_YAML="sre-config/agents/incident-handler-core.yaml"
 fi
-echo "  ✓ incident-handler subagent created"
+
+# Extract the spec from YAML and create via ARM
+SPEC_JSON=$(python3 -c "
+import yaml, json
+with open('${SUBAGENT_YAML}') as f:
+    data = yaml.safe_load(f)
+spec = data['spec']
+print(json.dumps(spec))
+")
+SPEC_B64=$(echo -n "$SPEC_JSON" | base64)
+
+az rest --method PUT \
+  --url "https://management.azure.com${AGENT_RESOURCE_ID}/subagents/incident-handler?api-version=${API_VERSION}" \
+  --body "{\"properties\":{\"value\":\"${SPEC_B64}\"}}" \
+  --output none 2>/dev/null
+
+echo "   ✅ Created: incident-handler subagent"
 echo ""
 
-# ---- Step 4: Create incident response plan ----
-echo "Step 4/5: Creating incident response plan..."
-srectl incidenthandler create \
-  --id grubify-http-errors \
-  --name "Grubify HTTP 500 Errors" \
-  --priority 3 \
-  --title-contains "500" \
-  --handling-agent incident-handler \
-  --max-attempts 3
-echo "  ✓ Incident response plan created"
+# ── Step 3: Create incident response plan ────────────────────────────────────
+echo "🚨 Step 3/4: Creating incident response plan..."
+TOKEN=$(get_token)
+
+curl -s -X PUT "${AGENT_ENDPOINT}/api/v1/incidentplayground/filters/grubify-http-errors" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id": "grubify-http-errors",
+    "name": "Grubify HTTP 5xx Errors",
+    "priority": "3",
+    "titleContains": "5xx",
+    "handlingAgent": "incident-handler",
+    "agentMode": "autonomous",
+    "maxAttempts": 3
+  }' > /dev/null 2>&1
+
+echo "   ✅ Created: grubify-http-errors response plan"
 echo ""
 
-# ---- Step 5: GitHub integration (optional) ----
+# ── Step 4: GitHub integration (optional) ────────────────────────────────────
+echo "🔗 Step 4/4: GitHub integration..."
+
 if [ -n "$GITHUB_PAT_VALUE" ]; then
-  echo "Step 5/5: Configuring GitHub integration..."
-
-  # Configure GitHub MCP connector
-  CONNECTOR_FILE=$(mktemp)
-  sed "s|PLACEHOLDER_GITHUB_PAT|${GITHUB_PAT_VALUE}|g" \
-    sre-config/connectors/github-mcp.yaml > "$CONNECTOR_FILE"
-  srectl connector apply -f "$CONNECTOR_FILE"
-  rm -f "$CONNECTOR_FILE"
-  echo "  ✓ GitHub MCP connector configured"
+  echo "   Configuring GitHub MCP connector..."
+  TOKEN=$(get_token)
 
   # Upload triage runbook
-  srectl doc upload --file ./knowledge-base/github-issue-triage.md
-  echo "  ✓ Uploaded github-issue-triage.md"
+  curl -s -X POST "${AGENT_ENDPOINT}/api/v1/AgentMemory/upload" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -F "triggerIndexing=true" \
+    -F "files=@./knowledge-base/github-issue-triage.md;type=text/plain" \
+    > /dev/null 2>&1
+  echo "   ✅ Uploaded: github-issue-triage.md"
 
-  # Create additional subagents
-  srectl agent apply -f sre-config/agents/code-analyzer.yaml
-  echo "  ✓ code-analyzer subagent created"
+  # Create code-analyzer subagent
+  SPEC_JSON=$(python3 -c "
+import yaml, json
+with open('sre-config/agents/code-analyzer.yaml') as f:
+    data = yaml.safe_load(f)
+print(json.dumps(data['spec']))
+")
+  SPEC_B64=$(echo -n "$SPEC_JSON" | base64)
+  az rest --method PUT \
+    --url "https://management.azure.com${AGENT_RESOURCE_ID}/subagents/code-analyzer?api-version=${API_VERSION}" \
+    --body "{\"properties\":{\"value\":\"${SPEC_B64}\"}}" \
+    --output none 2>/dev/null
+  echo "   ✅ Created: code-analyzer subagent"
 
-  srectl agent apply -f sre-config/agents/issue-triager.yaml
-  echo "  ✓ issue-triager subagent created"
+  # Create issue-triager subagent
+  SPEC_JSON=$(python3 -c "
+import yaml, json
+with open('sre-config/agents/issue-triager.yaml') as f:
+    data = yaml.safe_load(f)
+print(json.dumps(data['spec']))
+")
+  SPEC_B64=$(echo -n "$SPEC_JSON" | base64)
+  az rest --method PUT \
+    --url "https://management.azure.com${AGENT_RESOURCE_ID}/subagents/issue-triager?api-version=${API_VERSION}" \
+    --body "{\"properties\":{\"value\":\"${SPEC_B64}\"}}" \
+    --output none 2>/dev/null
+  echo "   ✅ Created: issue-triager subagent"
 
   echo ""
-  echo "  GitHub integration: ✅ Configured"
+  echo "   GitHub integration: ✅ Configured"
 else
-  echo "Step 5/5: GitHub integration — ⏭️  Skipped (no PAT provided)"
-  echo ""
-  echo "  To add GitHub later, run:"
-  echo "    export GITHUB_PAT=<your-pat>"
-  echo "    ./scripts/setup-github.sh"
+  echo "   ⏭️  No GITHUB_PAT — skipping GitHub integration"
+  echo "   To add GitHub later: GITHUB_PAT=<pat> ./scripts/setup-github.sh"
 fi
-
 echo ""
+
+# ── Summary ──────────────────────────────────────────────────────────────────
 echo "============================================="
 echo "  ✅ SRE Agent Lab Setup Complete!"
 echo "============================================="
 echo ""
-echo "  SRE Agent Portal:  https://sre.azure.com"
-echo "  Grubify App:       ${CONTAINER_APP_URL}"
-echo "  Resource Group:    ${RESOURCE_GROUP}"
+echo "  🤖 Agent Portal:  https://sre.azure.com"
+echo "  🌐 Grubify App:   ${CONTAINER_APP_URL}"
+echo "  📦 Resource Group: ${RESOURCE_GROUP}"
 echo ""
-echo "  Next steps:"
-echo "    1. Open https://sre.azure.com and find your agent"
-echo "    2. Explore Builder > Knowledge base, Connectors, Subagents"
-echo "    3. Run ./scripts/break-app.sh to trigger an incident"
-echo "    4. Watch the agent investigate and remediate!"
+echo "  What was configured:"
+echo "  ├── Knowledge base: http-500-errors.md, grubify-architecture.md"
+echo "  ├── Subagent: incident-handler"
+echo "  ├── Response plan: grubify-http-errors (Sev3, title contains '5xx')"
+if [ -n "$GITHUB_PAT_VALUE" ]; then
+echo "  ├── Subagents: code-analyzer, issue-triager"
+echo "  └── Knowledge base: github-issue-triage.md"
+else
+echo "  └── GitHub: skipped (run setup-github.sh to add later)"
+fi
 echo ""
+echo "  Next: Run ./scripts/break-app.sh to trigger an incident!"
+echo "============================================="

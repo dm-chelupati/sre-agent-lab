@@ -1,7 +1,8 @@
 #!/bin/bash
 # =============================================================================
-# Setup GitHub Integration (standalone)
-# Run this if you skipped GitHub during initial azd up and want to add it later.
+# setup-github.sh — Add GitHub integration to an existing SRE Agent
+# Uses REST APIs (az rest + curl) — no srectl dependency.
+# For the srectl version, see setup-github-srectl.sh
 #
 # Usage:
 #   export GITHUB_PAT=<your-github-pat>
@@ -10,58 +11,105 @@
 set -e
 
 if [ -z "$GITHUB_PAT" ]; then
-  echo "Error: GITHUB_PAT environment variable is not set."
+  echo "❌ GITHUB_PAT is not set."
   echo ""
   echo "Usage:"
-  echo "  export GITHUB_PAT=<your-github-pat>"
+  echo "  export GITHUB_PAT=ghp_xxxxxxxxxxxx"
   echo "  ./scripts/setup-github.sh"
   echo ""
-  echo "Create a PAT at https://github.com/settings/tokens with 'repo' scope."
+  echo "PAT needs 'repo' scope (Classic) or Contents:Read + Issues:Read/Write (Fine-grained)."
   exit 1
 fi
 
-echo ""
-echo "============================================="
-echo "  Adding GitHub Integration to SRE Agent"
-echo "============================================="
-echo ""
+# Read azd environment
+AGENT_ENDPOINT=$(azd env get-value SRE_AGENT_ENDPOINT 2>/dev/null || echo "")
+AGENT_NAME=$(azd env get-value SRE_AGENT_NAME 2>/dev/null || echo "")
+RESOURCE_GROUP=$(azd env get-value AZURE_RESOURCE_GROUP 2>/dev/null || echo "")
+SUBSCRIPTION_ID=$(az account show --query id -o tsv 2>/dev/null || echo "")
 
-# Configure GitHub MCP connector
-echo "Step 1/4: Configuring GitHub MCP connector..."
-CONNECTOR_FILE=$(mktemp)
-sed "s|PLACEHOLDER_GITHUB_PAT|${GITHUB_PAT}|g" \
-  sre-config/connectors/github-mcp.yaml > "$CONNECTOR_FILE"
-srectl connector apply -f "$CONNECTOR_FILE"
-rm -f "$CONNECTOR_FILE"
-echo "  ✓ GitHub MCP connector configured"
+if [ -z "$AGENT_ENDPOINT" ] || [ -z "$AGENT_NAME" ]; then
+  echo "❌ Could not read agent details. Run from azd project directory after 'azd up'."
+  exit 1
+fi
 
-# Upload triage runbook
-echo "Step 2/4: Uploading GitHub issue triage runbook..."
-srectl doc upload --file ./knowledge-base/github-issue-triage.md
-echo "  ✓ Uploaded github-issue-triage.md"
+AGENT_RESOURCE_ID="/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}/providers/Microsoft.App/agents/${AGENT_NAME}"
+API_VERSION="2025-05-01-preview"
 
-# Upgrade incident handler to full version (with GitHub tools)
-echo "Step 3/4: Upgrading incident handler with GitHub tools..."
-srectl agent apply -f sre-config/agents/incident-handler-full.yaml
-echo "  ✓ incident-handler upgraded with GitHub tools"
-
-# Create additional subagents
-echo "Step 4/4: Creating code-analyzer and issue-triager subagents..."
-srectl agent apply -f sre-config/agents/code-analyzer.yaml
-echo "  ✓ code-analyzer subagent created"
-srectl agent apply -f sre-config/agents/issue-triager.yaml
-echo "  ✓ issue-triager subagent created"
+get_token() {
+  az account get-access-token --resource https://azuresre.dev/.default --query accessToken -o tsv 2>/dev/null
+}
 
 echo ""
 echo "============================================="
-echo "  ✅ GitHub Integration Configured!"
+echo "  🔗 Adding GitHub Integration"
 echo "============================================="
 echo ""
-echo "  You now have:"
-echo "    • GitHub MCP connector (search code, create issues)"
-echo "    • code-analyzer subagent (source code RCA)"
-echo "    • issue-triager subagent (triage & label issues)"
-echo "    • Upgraded incident-handler (now creates GitHub issues)"
+
+# Step 1: Upload triage runbook
+echo "1️⃣  Uploading triage runbook..."
+TOKEN=$(get_token)
+curl -s -X POST "${AGENT_ENDPOINT}/api/v1/AgentMemory/upload" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -F "triggerIndexing=true" \
+  -F "files=@./knowledge-base/github-issue-triage.md;type=text/plain" \
+  > /dev/null 2>&1
+echo "   ✅ Uploaded github-issue-triage.md"
+
+# Step 2: Upgrade incident handler with GitHub tools
+echo "2️⃣  Upgrading incident handler..."
+SPEC_JSON=$(python3 -c "
+import yaml, json
+with open('sre-config/agents/incident-handler-full.yaml') as f:
+    data = yaml.safe_load(f)
+print(json.dumps(data['spec']))
+")
+SPEC_B64=$(echo -n "$SPEC_JSON" | base64)
+az rest --method PUT \
+  --url "https://management.azure.com${AGENT_RESOURCE_ID}/subagents/incident-handler?api-version=${API_VERSION}" \
+  --body "{\"properties\":{\"value\":\"${SPEC_B64}\"}}" \
+  --output none 2>/dev/null
+echo "   ✅ incident-handler upgraded with GitHub tools"
+
+# Step 3: Create code-analyzer subagent
+echo "3️⃣  Creating code-analyzer subagent..."
+SPEC_JSON=$(python3 -c "
+import yaml, json
+with open('sre-config/agents/code-analyzer.yaml') as f:
+    data = yaml.safe_load(f)
+print(json.dumps(data['spec']))
+")
+SPEC_B64=$(echo -n "$SPEC_JSON" | base64)
+az rest --method PUT \
+  --url "https://management.azure.com${AGENT_RESOURCE_ID}/subagents/code-analyzer?api-version=${API_VERSION}" \
+  --body "{\"properties\":{\"value\":\"${SPEC_B64}\"}}" \
+  --output none 2>/dev/null
+echo "   ✅ code-analyzer created"
+
+# Step 4: Create issue-triager subagent
+echo "4️⃣  Creating issue-triager subagent..."
+SPEC_JSON=$(python3 -c "
+import yaml, json
+with open('sre-config/agents/issue-triager.yaml') as f:
+    data = yaml.safe_load(f)
+print(json.dumps(data['spec']))
+")
+SPEC_B64=$(echo -n "$SPEC_JSON" | base64)
+az rest --method PUT \
+  --url "https://management.azure.com${AGENT_RESOURCE_ID}/subagents/issue-triager?api-version=${API_VERSION}" \
+  --body "{\"properties\":{\"value\":\"${SPEC_B64}\"}}" \
+  --output none 2>/dev/null
+echo "   ✅ issue-triager created"
+
+# Save PAT to azd env
+azd env set GITHUB_PAT "$GITHUB_PAT" 2>/dev/null || true
+
 echo ""
-echo "  Next: Try the Developer and Workflow scenarios in the lab."
+echo "============================================="
+echo "  ✅ GitHub Integration Complete!"
+echo "============================================="
+echo ""
+echo "  New capabilities:"
+echo "  ├── incident-handler: now searches GitHub code + creates issues"
+echo "  ├── code-analyzer: deep source code root cause analysis"
+echo "  └── issue-triager: automated issue triage from runbook"
 echo ""
