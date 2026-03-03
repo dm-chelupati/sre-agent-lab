@@ -124,9 +124,8 @@ ContainerAppConsoleLogs_CL
 | Alert | Trigger | Severity |
 |-------|---------|----------|
 | HTTP 5xx errors | > 5 requests with 5xx status in 5 min | Sev3 |
-| High memory usage | Working set > 800Mi (80% of 1Gi limit) | Sev2 |
-| Container restarts | Any restart in 5 min window (OOM) | Sev2 |
-| Log error spike | > 10 error-level log entries in 5 min | Sev3 |
+
+A single alert keeps things clean — the SRE Agent investigates the root cause (memory leak, OOM, code bug, etc.) regardless of which symptom triggered it.
 
 These alerts flow automatically to the SRE Agent via the managed resource group configuration.
 

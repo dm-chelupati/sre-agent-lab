@@ -75,10 +75,7 @@ module sreAgent 'modules/sre-agent.bicep' = {
 module alertRules 'modules/alert-rules.bicep' = {
   name: 'alert-rules'
   params: {
-    location: location
-    containerAppName: containerApp.outputs.containerAppName
     containerAppId: containerApp.outputs.containerAppId
-    logAnalyticsWorkspaceId: monitoring.outputs.logAnalyticsWorkspaceId
     environmentName: environmentName
   }
 }
