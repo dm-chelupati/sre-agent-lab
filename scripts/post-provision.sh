@@ -206,7 +206,8 @@ else
 fi
 
 # Wait for Azure Monitor platform to initialize before creating filters
-sleep 5
+echo "   Waiting for Azure Monitor to initialize..."
+sleep 10
 
 # Delete any existing filters (default quickstart + previous runs)
 TOKEN=$(get_token)
@@ -215,18 +216,27 @@ curl -s -o /dev/null -X DELETE "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filt
 curl -s -o /dev/null -X DELETE "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters/grubify-http-errors" \
   -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || true
 
-# Create response plan linking all alerts to incident-handler subagent
-HTTP_CODE=$(curl -s -o /tmp/response-plan-resp.txt -w "%{http_code}" \
-  -X PUT "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters/grubify-http-errors" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  --data-binary '{"id":"grubify-http-errors","name":"Grubify HTTP Errors","priorities":["Sev0","Sev1","Sev2","Sev3","Sev4"],"titleContains":"","handlingAgent":"incident-handler","agentMode":"autonomous","maxAttempts":3}')
+# Create response plan with retry (Azure Monitor needs time to be ready)
+FILTER_CREATED=false
+for attempt in 1 2 3; do
+  TOKEN=$(get_token)
+  HTTP_CODE=$(curl -s -o /tmp/response-plan-resp.txt -w "%{http_code}" \
+    -X PUT "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters/grubify-http-errors" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -H "Content-Type: application/json" \
+    --data-binary '{"id":"grubify-http-errors","name":"Grubify HTTP Errors","priorities":["Sev0","Sev1","Sev2","Sev3","Sev4"],"titleContains":"","handlingAgent":"incident-handler","agentMode":"autonomous","maxAttempts":3}')
 
-if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "409" ]; then
-  echo "   ✅ Response plan → incident-handler"
-else
-  echo "   ⚠️  Response plan HTTP ${HTTP_CODE} (set up in portal: Builder → Subagent → Add incident trigger)"
-  cat /tmp/response-plan-resp.txt 2>/dev/null | head -3
+  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ] || [ "$HTTP_CODE" = "409" ]; then
+    echo "   ✅ Response plan → incident-handler"
+    FILTER_CREATED=true
+    break
+  else
+    echo "   ⏳ Attempt $attempt/3: HTTP ${HTTP_CODE}, retrying in 10s..."
+    sleep 10
+  fi
+done
+if [ "$FILTER_CREATED" = "false" ]; then
+  echo "   ⚠️  Response plan failed after 3 attempts (set up in portal: Builder → Subagent → Add incident trigger)"
 fi
 rm -f /tmp/response-plan-resp.txt
 echo ""
