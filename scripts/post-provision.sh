@@ -254,6 +254,23 @@ with open('/tmp/mcp-connector-body.json', 'w') as f: json.dump(body, f)
   # Create scheduled task to triage issues every 12 hours
   echo "   Creating scheduled task for issue triage..."
   TOKEN=$(get_token)
+
+  # Delete any existing tasks with the same name to avoid duplicates
+  EXISTING_TASKS=$(curl -s "${AGENT_ENDPOINT}/api/v1/scheduledtasks" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "[]")
+  echo "$EXISTING_TASKS" | python3 -c "
+import sys,json
+try:
+    tasks=json.load(sys.stdin)
+    for t in tasks:
+        if t.get('name')=='triage-grubify-issues':
+            print(t.get('id',''))
+except: pass
+" 2>/dev/null | while read -r task_id; do
+    if [ -n "$task_id" ]; then
+      curl -s -o /dev/null -X DELETE "${AGENT_ENDPOINT}/api/v1/scheduledtasks/${task_id}" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null
+    fi
+  done
+
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
     -X POST "${AGENT_ENDPOINT}/api/v1/scheduledtasks" \
     -H "Authorization: Bearer ${TOKEN}" \
@@ -356,6 +373,25 @@ try:
     display = {'AzMonitor': 'Azure Monitor', 'None': 'Not configured'}.get(ptype, ptype)
     print(f'     {icon} {display}')
 except: print('     ⚠️  Could not determine')
+" 2>/dev/null
+echo ""
+
+# Scheduled tasks
+echo "  ⏰ Scheduled Tasks:"
+TASKS=$(curl -s "${AGENT_ENDPOINT}/api/v1/scheduledtasks" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "[]")
+echo "$TASKS" | python3 -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    for t in d:
+        name=t.get('name','?')
+        cron=t.get('cronExpression','?')
+        agent=t.get('agent','(none)')
+        status=t.get('status','?')
+        icon='✅' if status=='Active' else '⏸️'
+        print(f'     {icon} {name} ({cron}) → {agent}')
+    if not d: print('     (none)')
+except: print('     (could not retrieve)')
 " 2>/dev/null
 echo ""
 
