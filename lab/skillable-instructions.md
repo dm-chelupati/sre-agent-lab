@@ -401,16 +401,17 @@ Before we break things, try a few prompts to see the agent in action.
 
 ### Step 1: Investigate with Source Code
 
-1. [] In the SRE Agent portal, start a **new chat**.
+1. [] In the SRE Agent portal, start a **new chat** by clicking the **+ New Chat** button.
 
-1. [] Ask the agent to use the code-analyzer subagent:
+1. [] Type `/agent` in the chat box and select the **code-analyzer** subagent from the dropdown.
+
+1. [] Send the following prompt:
 
     ```
-    Use the code-analyzer subagent to investigate the Grubify app.
-    Check logs AND search the source code in @lab.Variable(githubUser)/grubify
-    to find the exact root cause of the memory issues. Correlate
-    log entries to specific code paths. Create a GitHub issue with
-    detailed findings including file:line references and a suggested fix.
+    The Grubify API is not responding — specifically the "Add to Cart" 
+    endpoint (/api/cart/{userId}/items) is failing. Can you investigate, 
+    find the root cause in the source code at @lab.Variable(githubUser)/grubify, 
+    and create a GitHub issue with your detailed findings?
     ```
 
 1. [] Observe the ADDITIONAL steps compared to the incident-handler:
