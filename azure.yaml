@@ -13,5 +13,5 @@ infra:
 
 hooks:
   postprovision:
-    shell: sh
+    shell: bash
     run: ./scripts/post-provision.sh
