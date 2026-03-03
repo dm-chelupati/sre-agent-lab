@@ -236,25 +236,18 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
 
 ### Step 6: Chat with Your Agent
 
-Before we break things, try a few prompts to see the agent in action. Start a **new chat** in the SRE Agent portal and try these:
+Before we break things, try a few prompts to see the agent in action.
 
-1. [] Ask how many container apps are deployed:
+> [!Alert] Always start a **new chat thread** for each prompt — do not use the welcome thread. Click the **+ New Chat** button in the SRE Agent portal.
+
+1. [] Ask about the deployed apps and get the frontend URL:
 
     ```
     How many container apps are deployed for the Grubify application?
     List them with their endpoints.
     ```
 
-    The agent should find both the API and frontend container apps and list their URLs.
-
-1. [] Ask for the frontend endpoint:
-
-    ```
-    What is the public endpoint URL for the Grubify frontend
-    container app?
-    ```
-
-    The agent should return the frontend FQDN. Copy the URL from the response.
+    The agent should find both the API and frontend container apps and list their URLs. Copy the frontend URL from the response.
 
 1. [] Open the Grubify app in your browser:
 
