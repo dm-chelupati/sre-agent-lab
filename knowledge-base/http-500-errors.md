@@ -61,10 +61,10 @@ AzureMetrics
 az monitor metrics list-definitions --resource <resourceId>
 
 # Get CPU usage metrics (last 1 hour)
-az monitor metrics list --resource <resourceId> --metric "UsageNanoCores" --interval PT5M --start-time $(date -u -v-1H +"%Y-%m-%dT%H:%M:%SZ") --end-time $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+az monitor metrics list --resource <resourceId> --metric "UsageNanoCores" --interval PT5M --start-time $(date -u -d '1 hour ago' +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -v-1H +"%Y-%m-%dT%H:%M:%SZ") --end-time $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # Get Memory usage metrics (last 1 hour)
-az monitor metrics list --resource <resourceId> --metric "WorkingSetBytes" --interval PT5M --start-time $(date -u -v-1H +"%Y-%m-%dT%H:%M:%SZ") --end-time $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+az monitor metrics list --resource <resourceId> --metric "WorkingSetBytes" --interval PT5M --start-time $(date -u -d '1 hour ago' +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -v-1H +"%Y-%m-%dT%H:%M:%SZ") --end-time $(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # Example with full resource ID:
 az monitor metrics list --resource "/subscriptions/cbf44432-7f45-4906-a85d-d2b14a1e8328/resourceGroups/rg-grubify-app/providers/Microsoft.App/containerApps/ca-grubify-api" --metric "UsageNanoCores" --interval PT5M

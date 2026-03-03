@@ -8,6 +8,15 @@
 #   export GITHUB_PAT=<your-github-pat>
 #   ./scripts/setup-github.sh
 # =============================================================================
+
+# Windows compatibility: python3 may be 'python' on Windows
+if command -v python3 &>/dev/null; then
+  PYTHON=python3
+elif command -v python &>/dev/null; then
+  PYTHON=python
+else
+  echo "ERROR: Python not found"; exit 1
+fi
 set -e
 
 if [ -z "$GITHUB_PAT" ]; then
@@ -57,7 +66,7 @@ echo "   ✅ Uploaded github-issue-triage.md"
 
 # Step 2: Upgrade incident handler with GitHub tools
 echo "2️⃣  Upgrading incident handler..."
-SPEC_JSON=$(python3 -c "
+SPEC_JSON=$($PYTHON -c "
 import yaml, json
 with open('sre-config/agents/incident-handler-full.yaml') as f:
     data = yaml.safe_load(f)
@@ -72,7 +81,7 @@ echo "   ✅ incident-handler upgraded with GitHub tools"
 
 # Step 3: Create code-analyzer subagent
 echo "3️⃣  Creating code-analyzer subagent..."
-SPEC_JSON=$(python3 -c "
+SPEC_JSON=$($PYTHON -c "
 import yaml, json
 with open('sre-config/agents/code-analyzer.yaml') as f:
     data = yaml.safe_load(f)
@@ -87,7 +96,7 @@ echo "   ✅ code-analyzer created"
 
 # Step 4: Create issue-triager subagent
 echo "4️⃣  Creating issue-triager subagent..."
-SPEC_JSON=$(python3 -c "
+SPEC_JSON=$($PYTHON -c "
 import yaml, json
 with open('sre-config/agents/issue-triager.yaml') as f:
     data = yaml.safe_load(f)

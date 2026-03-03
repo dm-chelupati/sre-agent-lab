@@ -10,6 +10,16 @@
 # =============================================================================
 set -uo pipefail
 
+# Windows compatibility: python3 may be 'python' on Windows
+if command -v python3 &>/dev/null; then
+  PYTHON=python3
+elif command -v python &>/dev/null; then
+  PYTHON=python
+else
+  echo "❌ ERROR: Python not found. Install Python 3."
+  exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_DIR"
@@ -149,7 +159,7 @@ create_subagent() {
   token=$(get_token)
 
   # Convert YAML spec to API JSON using helper script
-  python3 "$SCRIPT_DIR/yaml-to-api-json.py" "$yaml_file" "/tmp/${agent_name}-body.json" > /dev/null 2>&1
+  $PYTHON "$SCRIPT_DIR/yaml-to-api-json.py" "$yaml_file" "/tmp/${agent_name}-body.json" > /dev/null 2>&1
 
   local http_code
   http_code=$(curl -s -o /tmp/${agent_name}-resp.txt -w "%{http_code}" \
@@ -170,7 +180,7 @@ create_subagent() {
 # ── Helper: Check if something exists (for --retry mode) ─────────────────────
 check_kb_files() {
   local token=$(get_token)
-  local count=$(curl -s "${AGENT_ENDPOINT}/api/v1/AgentMemory/files" -H "Authorization: Bearer ${token}" 2>/dev/null | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('files',[])))" 2>/dev/null || echo "0")
+  local count=$(curl -s "${AGENT_ENDPOINT}/api/v1/AgentMemory/files" -H "Authorization: Bearer ${token}" 2>/dev/null | $PYTHON -c "import sys,json; print(len(json.load(sys.stdin).get('files',[])))" 2>/dev/null || echo "0")
   [ "$count" -ge 2 ]
 }
 
@@ -183,7 +193,7 @@ check_subagent_exists() {
 
 check_response_plan_exists() {
   local token=$(get_token)
-  local count=$(curl -s "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters" -H "Authorization: Bearer ${token}" 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(len([f for f in d if f.get('handlingAgent')]))" 2>/dev/null || echo "0")
+  local count=$(curl -s "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters" -H "Authorization: Bearer ${token}" 2>/dev/null | $PYTHON -c "import sys,json; d=json.load(sys.stdin); print(len([f for f in d if f.get('handlingAgent')]))" 2>/dev/null || echo "0")
   [ "$count" -ge 1 ]
 }
 
@@ -290,7 +300,7 @@ if [ -n "$GITHUB_PAT_VALUE" ]; then
   # Create GitHub MCP connector via ARM API (use temp file to avoid shell escaping issues)
   echo "   Creating GitHub MCP connector..."
   echo "   PAT length: ${#GITHUB_PAT_VALUE}"
-  python3 -c "
+  $PYTHON -c "
 import json, os
 pat = os.environ.get('GITHUB_PAT_VALUE', '')
 print(f'   Python PAT length: {len(pat)}')
@@ -332,7 +342,7 @@ with open('/tmp/mcp-connector-body.json', 'w') as f: json.dump(body, f)
 
   # Delete any existing tasks with the same name to avoid duplicates
   EXISTING_TASKS=$(curl -s "${AGENT_ENDPOINT}/api/v1/scheduledtasks" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "[]")
-  echo "$EXISTING_TASKS" | python3 -c "
+  echo "$EXISTING_TASKS" | $PYTHON -c "
 import sys,json
 try:
     tasks=json.load(sys.stdin)
@@ -346,7 +356,7 @@ except: pass
     fi
   done
 
-  python3 -c "
+  $PYTHON -c "
 import json, os
 repo = os.environ.get('GITHUB_REPO', 'dm-chelupati/grubify')
 body = {'name':'triage-grubify-issues','description':f'Triage customer issues in {repo} every 12 hours','cronExpression':'0 */12 * * *','agentPrompt':f'Use the issue-triager subagent to list all open issues in {repo} that have [Customer Issue] in the title and have not been triaged yet. For each untriaged customer issue, classify it, add labels, and post a triage comment following the triage runbook in the knowledge base.','agent':'issue-triager'}
@@ -383,7 +393,7 @@ TOKEN=$(get_token)
 # KB files
 echo "  📚 Knowledge Base:"
 KB_FILES=$(curl -s "${AGENT_ENDPOINT}/api/v1/AgentMemory/files" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
-echo "$KB_FILES" | python3 -c "
+echo "$KB_FILES" | $PYTHON -c "
 import sys,json
 try:
     d=json.load(sys.stdin)
@@ -398,7 +408,7 @@ echo ""
 # Subagents
 echo "  🤖 Subagents:"
 AGENTS=$(curl -s "${AGENT_ENDPOINT}/api/v2/extendedAgent/agents" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
-echo "$AGENTS" | python3 -c "
+echo "$AGENTS" | $PYTHON -c "
 import sys,json
 try:
     d=json.load(sys.stdin)
@@ -415,7 +425,7 @@ echo ""
 # Connectors
 echo "  🔗 Connectors:"
 CONNECTORS=$(az rest --method GET --url "https://management.azure.com${AGENT_RESOURCE_ID}/DataConnectors?api-version=${API_VERSION}" --query "value[].{name:name,state:properties.provisioningState}" -o json 2>/dev/null || echo "[]")
-echo "$CONNECTORS" | python3 -c "
+echo "$CONNECTORS" | $PYTHON -c "
 import sys,json
 try:
     d=json.load(sys.stdin)
@@ -430,7 +440,7 @@ echo ""
 # Response plans
 echo "  🚨 Response Plans:"
 FILTERS=$(curl -s "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null)
-echo "$FILTERS" | python3 -c "
+echo "$FILTERS" | $PYTHON -c "
 import sys,json
 try:
     d=json.load(sys.stdin)
@@ -446,7 +456,7 @@ echo ""
 # Incident platform
 echo "  📡 Incident Platform:"
 PLATFORM_RAW=$(curl -s "${AGENT_ENDPOINT}/api/v1/incidentPlayground/incidentPlatformType" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "{}")
-echo "$PLATFORM_RAW" | python3 -c "
+echo "$PLATFORM_RAW" | $PYTHON -c "
 import sys,json
 try:
     d=json.load(sys.stdin)
@@ -461,7 +471,7 @@ echo ""
 # Scheduled tasks
 echo "  ⏰ Scheduled Tasks:"
 TASKS=$(curl -s "${AGENT_ENDPOINT}/api/v1/scheduledtasks" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "[]")
-echo "$TASKS" | python3 -c "
+echo "$TASKS" | $PYTHON -c "
 import sys,json
 try:
     d=json.load(sys.stdin)

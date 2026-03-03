@@ -38,7 +38,7 @@ If you want to use GitHub:
 3. **Fork the Grubify repo** — Open a terminal on the VM and run:
 
     ```
-    gh auth login --with-token <<< "@lab.Variable(githubPat)"
+    echo @lab.Variable(githubPat) | gh auth login --with-token
     gh repo fork dm-chelupati/grubify --clone=false
     ```
 
@@ -96,7 +96,7 @@ In this section you will clone the lab repository and deploy all Azure resources
 
 ### Step 1: Sign in to Azure
 
-1. [] Open a **Terminal** on the lab VM (VS Code terminal or command prompt).
+1. [] Open a **Git Bash** terminal on the lab VM (search for "Git Bash" in the Start menu, or open VS Code and select Git Bash as the terminal).
 
 1. [] Sign in to Azure CLI:
 
