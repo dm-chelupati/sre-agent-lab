@@ -89,6 +89,7 @@ output agentPortalUrl string = sreAgent.outputs.agentPortalUrl
 output containerAppUrl string = containerApp.outputs.containerAppUrl
 output containerAppName string = containerApp.outputs.containerAppName
 output containerAppEnvName string = containerApp.outputs.containerAppEnvName
+output containerAppEnvId string = containerApp.outputs.containerAppEnvId
 output acrName string = containerApp.outputs.acrName
 output acrLoginServer string = containerApp.outputs.acrLoginServer
 output logAnalyticsWorkspaceId string = monitoring.outputs.logAnalyticsWorkspaceId
