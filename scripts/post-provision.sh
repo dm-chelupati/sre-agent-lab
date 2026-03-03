@@ -8,7 +8,7 @@
 #   - Creates incident response plan
 #   - (Optional) GitHub MCP + additional subagents
 # =============================================================================
-set -euo pipefail
+set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -202,15 +202,22 @@ echo "🔗 Step 4/5: GitHub integration..."
 if [ -n "$GITHUB_PAT_VALUE" ]; then
   # Create GitHub MCP connector via ARM API (use temp file to avoid shell escaping issues)
   echo "   Creating GitHub MCP connector..."
+  echo "   PAT length: ${#GITHUB_PAT_VALUE}"
   python3 -c "
 import json, os
-body = {'properties': {'name': 'github-mcp', 'dataConnectorType': 'Mcp', 'dataSource': 'placeholder', 'extendedProperties': {'type': 'http', 'endpoint': 'https://api.githubcopilot.com/mcp/', 'authType': 'BearerToken', 'bearerToken': os.environ.get('GITHUB_PAT_VALUE', '')}, 'identity': 'system'}}
+pat = os.environ.get('GITHUB_PAT_VALUE', '')
+print(f'   Python PAT length: {len(pat)}')
+body = {'properties': {'name': 'github-mcp', 'dataConnectorType': 'Mcp', 'dataSource': 'placeholder', 'extendedProperties': {'type': 'http', 'endpoint': 'https://api.githubcopilot.com/mcp/', 'authType': 'BearerToken', 'bearerToken': pat}, 'identity': 'system'}}
 with open('/tmp/mcp-connector-body.json', 'w') as f: json.dump(body, f)
 "
-  az rest --method PUT \
+  if az rest --method PUT \
     --url "https://management.azure.com${AGENT_RESOURCE_ID}/DataConnectors/github-mcp?api-version=${API_VERSION}" \
     --body @/tmp/mcp-connector-body.json \
-    --output none 2>/dev/null && echo "   ✅ GitHub MCP connector created" || echo "   ⚠️  Could not create GitHub MCP connector"
+    --output none 2>&1; then
+    echo "   ✅ GitHub MCP connector created"
+  else
+    echo "   ⚠️  Could not create GitHub MCP connector (check PAT and permissions)"
+  fi
   rm -f /tmp/mcp-connector-body.json
 
   # Upload triage runbook
