@@ -51,5 +51,7 @@ output SRE_AGENT_ENDPOINT string = resources.outputs.agentEndpoint
 output AGENT_PORTAL_URL string = resources.outputs.agentPortalUrl
 output CONTAINER_APP_URL string = resources.outputs.containerAppUrl
 output CONTAINER_APP_NAME string = resources.outputs.containerAppName
+output FRONTEND_APP_URL string = resources.outputs.frontendAppUrl
+output FRONTEND_APP_NAME string = resources.outputs.frontendAppName
 output LOG_ANALYTICS_WORKSPACE_ID string = resources.outputs.logAnalyticsWorkspaceId
 output APP_INSIGHTS_CONNECTION_STRING string = resources.outputs.appInsightsConnectionString

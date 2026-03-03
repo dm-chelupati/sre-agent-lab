@@ -99,10 +99,65 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   }
 }
 
+// Grubify Frontend Container App
+var frontendAppName = replace(containerAppName, 'grubify', 'grubify-fe')
+resource frontendApp 'Microsoft.App/containerApps@2024-03-01' = {
+  name: frontendAppName
+  location: location
+  properties: {
+    managedEnvironmentId: containerAppEnv.id
+    configuration: {
+      registries: [
+        {
+          server: acr.properties.loginServer
+          username: acr.listCredentials().username
+          passwordSecretRef: 'acr-password'
+        }
+      ]
+      secrets: [
+        {
+          name: 'acr-password'
+          value: acr.listCredentials().passwords[0].value
+        }
+      ]
+      ingress: {
+        external: true
+        targetPort: 80
+        transport: 'auto'
+        allowInsecure: false
+      }
+    }
+    template: {
+      containers: [
+        {
+          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+          name: 'grubify-frontend'
+          resources: {
+            cpu: json('0.25')
+            memory: '0.5Gi'
+          }
+          env: [
+            {
+              name: 'REACT_APP_API_BASE_URL'
+              value: 'https://${containerApp.properties.configuration.ingress.fqdn}/api'
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 3
+      }
+    }
+  }
+}
+
 // Outputs
 output containerAppId string = containerApp.id
 output containerAppName string = containerApp.name
 output containerAppUrl string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
+output frontendAppName string = frontendApp.name
+output frontendAppUrl string = 'https://${frontendApp.properties.configuration.ingress.fqdn}'
 output containerAppEnvId string = containerAppEnv.id
 output containerAppEnvName string = containerAppEnv.name
 output acrName string = acr.name

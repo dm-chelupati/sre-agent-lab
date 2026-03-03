@@ -26,6 +26,7 @@ AGENT_NAME=$(azd env get-value SRE_AGENT_NAME 2>/dev/null || echo "")
 RESOURCE_GROUP=$(azd env get-value AZURE_RESOURCE_GROUP 2>/dev/null || echo "")
 CONTAINER_APP_URL=$(azd env get-value CONTAINER_APP_URL 2>/dev/null || echo "")
 CONTAINER_APP_NAME=$(azd env get-value CONTAINER_APP_NAME 2>/dev/null || echo "")
+FRONTEND_APP_NAME=$(azd env get-value FRONTEND_APP_NAME 2>/dev/null || echo "")
 ACR_NAME=$(azd env get-value AZURE_CONTAINER_REGISTRY_NAME 2>/dev/null || echo "")
 GITHUB_PAT_VALUE=$(azd env get-value GITHUB_PAT 2>/dev/null || echo "")
 # azd env get-value outputs error text when key is missing — clean it up
@@ -70,7 +71,32 @@ if [ -n "$ACR_NAME" ] && [ -d "$PROJECT_DIR/src/grubify/GrubifyApi" ]; then
   CONTAINER_APP_URL="https://${CONTAINER_APP_URL}"
   azd env set CONTAINER_APP_URL "$CONTAINER_APP_URL" 2>/dev/null || true
 
-  echo "   ✅ Deployed: ${CONTAINER_APP_URL}"
+  echo "   ✅ API deployed: ${CONTAINER_APP_URL}"
+
+  # Build and deploy frontend
+  if [ -d "$PROJECT_DIR/src/grubify/grubify-frontend" ]; then
+    FRONTEND_IMAGE="${ACR_LOGIN_SERVER}/grubify-frontend:latest"
+
+    az acr build \
+      --registry "$ACR_NAME" \
+      --image "grubify-frontend:latest" \
+      --file "$PROJECT_DIR/src/grubify/grubify-frontend/Dockerfile" \
+      "$PROJECT_DIR/src/grubify/grubify-frontend" \
+      --no-logs --output none 2>/dev/null
+
+    az containerapp update \
+      --name "$FRONTEND_APP_NAME" \
+      --resource-group "$RESOURCE_GROUP" \
+      --image "$FRONTEND_IMAGE" \
+      --set-env-vars "REACT_APP_API_BASE_URL=https://${CONTAINER_APP_URL#https://}/api" \
+      --output none 2>/dev/null
+
+    FRONTEND_URL=$(az containerapp show --name "$FRONTEND_APP_NAME" --resource-group "$RESOURCE_GROUP" --query "properties.configuration.ingress.fqdn" -o tsv 2>/dev/null)
+    FRONTEND_URL="https://${FRONTEND_URL}"
+    azd env set FRONTEND_APP_URL "$FRONTEND_URL" 2>/dev/null || true
+
+    echo "   ✅ Frontend deployed: ${FRONTEND_URL}"
+  fi
 else
   echo "   ⏭️  Skipped (ACR or source not found — using placeholder image)"
 fi
