@@ -99,6 +99,11 @@ In this section you will clone the lab repository and deploy all Azure resources
 ### Prerequisites (Windows lab)
 
 > [!Knowledge] If Python is not installed, run in CMD: `winget install Python.Python.3.12` then open a new terminal. The post-provision script requires Python 3.
+>
+> Also register the required resource provider:
+> ```
+> az provider register -n Microsoft.App --wait
+> ```
 
 ### Step 1: Sign in to Azure
 
