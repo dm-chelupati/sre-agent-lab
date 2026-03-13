@@ -34,4 +34,4 @@ spec:
   tools:
     - SearchMemory
   mcp_tools:
-    - github-mcp/*
+    - github/*

@@ -31,8 +31,8 @@ azd auth login
 # 3. Create environment
 azd env new sre-lab
 
-# 4. (Optional) Set GitHub PAT for bonus scenarios
-azd env set GITHUB_PAT <your-github-pat>
+# 4. Sign in to GitHub (after setup prints OAuth URL)
+# Open the OAuth URL printed by post-provision.sh in your browser
 
 # 5. Deploy everything
 azd up
@@ -85,7 +85,7 @@ After the initial `azd up`, you can re-run the post-provision script to update c
 - Knowledge base: HTTP error runbook + app architecture doc + incident report template
 - Incident handler subagent with diagnostic tools
 - Incident response plan for HTTP 500 alerts
-- (If GitHub PAT) GitHub MCP connector + code-analyzer + issue-triager subagents + scheduled triage task
+- GitHub OAuth connector + code-analyzer + issue-triager subagents + scheduled triage task
 
 ## Lab Scenarios
 
@@ -126,7 +126,7 @@ The agent classifies issues (Documentation, Bug, Feature Request), applies label
 If you skipped GitHub during setup:
 
 ```bash
-export GITHUB_PAT=<your-pat>
+# OAuth — no PAT needed. Sign in via the URL printed by setup.
 ./scripts/setup-github.sh
 ```
 
@@ -158,7 +158,7 @@ sre-agent-lab/
 │   └── github-issue-triage.md      # Issue triage runbook (GitHub)
 ├── sre-config/
 │   ├── connectors/
-│   │   └── github-mcp.yaml        # GitHub MCP connector
+│   │   └── github-oauth.yaml       # GitHub OAuth connector
 │   └── agents/
 │       ├── incident-handler-core.yaml   # Core subagent (no GitHub)
 │       ├── incident-handler-full.yaml   # Full subagent (with GitHub)

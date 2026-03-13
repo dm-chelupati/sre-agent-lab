@@ -36,4 +36,4 @@ spec:
     - QueryAppInsightsByResourceId
     - ExecutePythonCode
   mcp_tools:
-    - github-mcp/*
+    - github/*

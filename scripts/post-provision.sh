@@ -6,7 +6,7 @@
 #   - Uploads knowledge base files
 #   - Creates subagents via dataplane v2 API
 #   - Creates incident response plan
-#   - (Optional) GitHub MCP + additional subagents
+#   - GitHub OAuth connector + subagents
 # =============================================================================
 set -uo pipefail
 
@@ -48,16 +48,10 @@ CONTAINER_APP_URL=$(azd env get-value CONTAINER_APP_URL 2>/dev/null || echo "")
 CONTAINER_APP_NAME=$(azd env get-value CONTAINER_APP_NAME 2>/dev/null || echo "")
 FRONTEND_APP_NAME=$(azd env get-value FRONTEND_APP_NAME 2>/dev/null || echo "")
 ACR_NAME=$(azd env get-value AZURE_CONTAINER_REGISTRY_NAME 2>/dev/null || echo "")
-GITHUB_PAT_VALUE=$(azd env get-value GITHUB_PAT 2>/dev/null || echo "")
 GITHUB_USER=$(azd env get-value GITHUB_USER 2>/dev/null || echo "")
-# azd env get-value outputs error text when key is missing — clean it up
-if echo "$GITHUB_PAT_VALUE" | grep -q "ERROR\|not found"; then
-  GITHUB_PAT_VALUE=""
-fi
 if echo "$GITHUB_USER" | grep -q "ERROR\|not found"; then
   GITHUB_USER=""
 fi
-export GITHUB_PAT_VALUE
 # Build the repo name from username (defaults to dm-chelupati if not set)
 export GITHUB_REPO="${GITHUB_USER:+${GITHUB_USER}/grubify}"
 GITHUB_REPO="${GITHUB_REPO:-dm-chelupati/grubify}"
@@ -228,13 +222,8 @@ echo ""
 
 # ── Step 2: Create incident-handler subagent ─────────────────────────────────
 echo "🤖 Step 2/5: Creating/updating incident-handler subagent..."
-if [ -n "$GITHUB_PAT_VALUE" ]; then
-  echo "   GitHub PAT detected — using full config"
-  create_subagent "sre-config/agents/incident-handler-full.yaml" "incident-handler"
-else
-  echo "   No GitHub PAT — using core config"
-  create_subagent "sre-config/agents/incident-handler-core.yaml" "incident-handler"
-fi
+echo "   Using full config with GitHub tools"
+create_subagent "sre-config/agents/incident-handler-full.yaml" "incident-handler"
 echo ""
 
 # ── Step 3: Enable Azure Monitor + create response plan ──────────────────────
@@ -298,56 +287,77 @@ curl -s -o /dev/null -X DELETE "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filt
 
 echo ""
 
-# ── Step 4: GitHub integration (optional) ────────────────────────────────────
+# ── Step 4: GitHub integration ───────────────────────────────────────────────
 echo "🔗 Step 4/5: GitHub integration..."
 
-if [ -n "$GITHUB_PAT_VALUE" ]; then
-  # Create GitHub MCP connector via ARM API (use temp file to avoid shell escaping issues)
-  echo "   Creating GitHub MCP connector..."
-  echo "   PAT length: ${#GITHUB_PAT_VALUE}"
-  $PYTHON -c "
-import json, os
-pat = os.environ.get('GITHUB_PAT_VALUE', '')
-print(f'   Python PAT length: {len(pat)}')
-body = {'properties': {'name': 'github-mcp', 'dataConnectorType': 'Mcp', 'dataSource': 'placeholder', 'extendedProperties': {'type': 'http', 'endpoint': 'https://api.githubcopilot.com/mcp/', 'authType': 'BearerToken', 'bearerToken': pat}, 'identity': 'system'}}
-with open('/tmp/mcp-connector-body.json', 'w') as f: json.dump(body, f)
-"
-  if az rest --method PUT \
-    --url "https://management.azure.com${AGENT_RESOURCE_ID}/DataConnectors/github-mcp?api-version=${API_VERSION}" \
-    --body @/tmp/mcp-connector-body.json \
-    --output none 2>&1; then
-    echo "   ✅ GitHub MCP connector created"
-  else
-    echo "   ⚠️  Could not create GitHub MCP connector (check PAT and permissions)"
-  fi
-  rm -f /tmp/mcp-connector-body.json
+# Create GitHub OAuth connector via data plane API (no PAT needed)
+echo "   Creating GitHub OAuth connector..."
+TOKEN=$(get_token)
+GITHUB_EXISTS=$(curl -s "${AGENT_ENDPOINT}/api/v2/extendedAgent/connectors/github" \
+  -H "Authorization: Bearer ${TOKEN}" 2>/dev/null | $PYTHON -c "
+import sys,json
+try:
+    d=json.load(sys.stdin)
+    print('yes' if d.get('name')=='github' else 'no')
+except: print('no')
+" 2>/dev/null)
 
-  # Upload triage runbook
-  TOKEN=$(get_token)
-  curl -s -o /dev/null \
-    -X POST "${AGENT_ENDPOINT}/api/v1/AgentMemory/upload" \
+if [ "$GITHUB_EXISTS" = "yes" ]; then
+  echo "   ✅ GitHub OAuth connector already exists"
+else
+  RESULT=$(curl -s -o /dev/null -w "%{http_code}" \
+    -X PUT "${AGENT_ENDPOINT}/api/v2/extendedAgent/connectors/github" \
     -H "Authorization: Bearer ${TOKEN}" \
-    -F "triggerIndexing=true" \
-    -F "files=@./knowledge-base/github-issue-triage.md;type=text/plain"
-  echo "   ✅ Uploaded: github-issue-triage.md"
+    -H "Content-Type: application/json" \
+    -d '{"name":"github","type":"AgentConnector","properties":{"dataConnectorType":"GitHubOAuth","dataSource":"github-oauth"}}')
+  if [ "$RESULT" = "200" ] || [ "$RESULT" = "201" ]; then
+    echo "   ✅ GitHub OAuth connector created"
+  else
+    echo "   ⚠️  GitHub connector returned HTTP ${RESULT}"
+  fi
+fi
 
-  # Create sample customer issues for triage demo
-  echo "   Creating sample customer issues..."
-  export GITHUB_REPO GITHUB_PAT_VALUE
-  export GITHUB_PAT="${GITHUB_PAT_VALUE}"
-  bash ./scripts/create-sample-issues.sh "${GITHUB_REPO}" 2>/dev/null || echo "   ⚠️  Could not create sample issues"
+# Get OAuth login URL for user to authorize
+TOKEN=$(get_token)
+OAUTH_URL=$(curl -s "${AGENT_ENDPOINT}/api/v1/github/config" \
+  -H "Authorization: Bearer ${TOKEN}" 2>/dev/null | $PYTHON -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print(d.get('oAuthUrl', '') or d.get('OAuthUrl', '') or '')
+except: print('')
+" 2>/dev/null)
 
-  # Create additional subagents
-  create_subagent "sre-config/agents/code-analyzer.yaml" "code-analyzer"
-  create_subagent "sre-config/agents/issue-triager.yaml" "issue-triager"
+# Add code repo
+echo "   Adding ${GITHUB_REPO} code repository..."
+TOKEN=$(get_token)
+REPO_NAME=$(echo "$GITHUB_REPO" | cut -d'/' -f2)
+curl -s -o /dev/null -w "" \
+  -X PUT "${AGENT_ENDPOINT}/api/v2/repos/${REPO_NAME}" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"${REPO_NAME}\",\"type\":\"CodeRepo\",\"properties\":{\"url\":\"https://github.com/${GITHUB_REPO}\"}}"
+echo "   ✅ Code repo: ${GITHUB_REPO}"
 
-  # Create scheduled task to triage issues every 12 hours
-  echo "   Creating scheduled task for issue triage..."
-  TOKEN=$(get_token)
+# Upload triage runbook
+TOKEN=$(get_token)
+curl -s -o /dev/null \
+  -X POST "${AGENT_ENDPOINT}/api/v1/AgentMemory/upload" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -F "triggerIndexing=true" \
+  -F "files=@./knowledge-base/github-issue-triage.md;type=text/plain"
+echo "   ✅ Uploaded: github-issue-triage.md"
 
-  # Delete any existing tasks with the same name to avoid duplicates
-  EXISTING_TASKS=$(curl -s "${AGENT_ENDPOINT}/api/v1/scheduledtasks" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "[]")
-  echo "$EXISTING_TASKS" | $PYTHON -c "
+# Create additional subagents
+create_subagent "sre-config/agents/code-analyzer.yaml" "code-analyzer"
+create_subagent "sre-config/agents/issue-triager.yaml" "issue-triager"
+
+# Create scheduled task to triage issues every 12 hours
+echo "   Creating scheduled task for issue triage..."
+TOKEN=$(get_token)
+
+EXISTING_TASKS=$(curl -s "${AGENT_ENDPOINT}/api/v1/scheduledtasks" -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo "[]")
+echo "$EXISTING_TASKS" | $PYTHON -c "
 import sys,json
 try:
     tasks=json.load(sys.stdin)
@@ -361,29 +371,34 @@ except: pass
     fi
   done
 
-  $PYTHON -c "
+$PYTHON -c "
 import json, os
 repo = os.environ.get('GITHUB_REPO', 'dm-chelupati/grubify')
 body = {'name':'triage-grubify-issues','description':f'Triage customer issues in {repo} every 12 hours','cronExpression':'0 */12 * * *','agentPrompt':f'Use the issue-triager subagent to list all open issues in {repo} that have [Customer Issue] in the title and have not been triaged yet. For each untriaged customer issue, classify it, add labels, and post a triage comment following the triage runbook in the knowledge base.','agent':'issue-triager'}
 with open('/tmp/scheduled-task-body.json', 'w') as f: json.dump(body, f)
 "
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-    -X POST "${AGENT_ENDPOINT}/api/v1/scheduledtasks" \
-    -H "Authorization: Bearer ${TOKEN}" \
-    -H "Content-Type: application/json" \
-    --data-binary @/tmp/scheduled-task-body.json)
-  rm -f /tmp/scheduled-task-body.json
-  if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ]; then
-    echo "   ✅ Scheduled task: triage-grubify-issues (every 12h → issue-triager)"
-  else
-    echo "   ⚠️  Scheduled task returned HTTP ${HTTP_CODE}"
-  fi
-
-  echo ""
-  echo "   GitHub integration: ✅ Configured"
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+  -X POST "${AGENT_ENDPOINT}/api/v1/scheduledtasks" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  --data-binary @/tmp/scheduled-task-body.json)
+rm -f /tmp/scheduled-task-body.json
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ]; then
+  echo "   ✅ Scheduled task: triage-grubify-issues (every 12h → issue-triager)"
 else
-  echo "   ⏭️  No GITHUB_PAT — skipping"
-  echo "   To add later: GITHUB_PAT=<pat> ./scripts/setup-github.sh"
+  echo "   ⚠️  Scheduled task returned HTTP ${HTTP_CODE}"
+fi
+
+echo ""
+echo "   GitHub integration: ✅ Configured"
+
+if [ -n "$OAUTH_URL" ]; then
+  echo ""
+  echo "   ┌──────────────────────────────────────────────────────────┐"
+  echo "   │  Sign in to GitHub to authorize the SRE Agent:          │"
+  echo "   │  ${OAUTH_URL}"
+  echo "   │  Open this URL in your browser and click 'Authorize'    │"
+  echo "   └──────────────────────────────────────────────────────────┘"
 fi
 echo ""
 
@@ -437,7 +452,7 @@ try:
     for c in d:
         state='✅' if c.get('state')=='Succeeded' else '⏳ '+str(c.get('state',''))
         print(f'     {state} {c[\"name\"]}')
-    if not d: print('     (none — GitHub PAT not provided or connector pending)')
+    if not d: print('     (none — connector pending)')
 except: print('     (could not retrieve)')
 " 2>/dev/null
 echo ""
@@ -504,7 +519,7 @@ echo ""
 echo "  👉 Go to https://sre.azure.com and explore:"
 echo "     1. Builder → Knowledge base (see uploaded runbooks)"
 echo "     2. Builder → Subagent builder (see subagents + tools)"
-echo "     3. Builder → Connectors (see GitHub MCP)"
+echo "     3. Builder → Connectors (see GitHub OAuth)"
 echo "     4. Settings → Incident platform (Azure Monitor)"
 echo ""
 echo "  Then run: ./scripts/break-app.sh"
