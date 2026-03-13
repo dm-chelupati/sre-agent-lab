@@ -66,21 +66,35 @@ echo "📡 Agent: ${AGENT_ENDPOINT}"
 echo "📦 RG:    ${RESOURCE_GROUP}"
 echo ""
 
-# ── Step 0: Build & deploy Grubify via ACR (cloud-side, no local Docker) ─────
+# ── Step 0: Build & deploy Grubify via ACR (cloud-side, no local clone needed) ─
+GRUBIFY_REPO="https://github.com/dm-chelupati/grubify.git"
+
 if [ -n "$SKIP_BUILD" ]; then
   echo "🐳 Step 0/5: ⏭️  Skipped (--skip-build or --retry)"
-elif [ -n "$ACR_NAME" ] && [ -d "$PROJECT_DIR/src/grubify/GrubifyApi" ]; then
+elif [ -n "$ACR_NAME" ]; then
   echo "🐳 Step 0/5: Building Grubify container images in ACR..."
   ACR_LOGIN_SERVER=$(az acr show --name "$ACR_NAME" --query loginServer -o tsv 2>/dev/null)
   IMAGE_TAG="${ACR_LOGIN_SERVER}/grubify-api:latest"
 
-  echo "   Building API image in ACR (this takes ~1 min)..."
-  az acr build \
-    --registry "$ACR_NAME" \
-    --image "grubify-api:latest" \
-    --file "$PROJECT_DIR/src/grubify/GrubifyApi/Dockerfile" \
-    "$PROJECT_DIR/src/grubify/GrubifyApi" \
-    --no-logs --output none 2>/dev/null
+  # Build from remote GitHub repo — no local clone needed
+  echo "   Building API image from GitHub repo (this takes ~1-2 min)..."
+  if [ -d "$PROJECT_DIR/src/grubify/GrubifyApi" ]; then
+    # Use local source if submodule is cloned
+    az acr build \
+      --registry "$ACR_NAME" \
+      --image "grubify-api:latest" \
+      --file "$PROJECT_DIR/src/grubify/GrubifyApi/Dockerfile" \
+      "$PROJECT_DIR/src/grubify/GrubifyApi" \
+      --no-logs --output none 2>/dev/null
+  else
+    # Build directly from GitHub — no local clone needed
+    az acr build \
+      --registry "$ACR_NAME" \
+      --image "grubify-api:latest" \
+      --file "GrubifyApi/Dockerfile" \
+      "${GRUBIFY_REPO}#main:GrubifyApi" \
+      --no-logs --output none 2>/dev/null
+  fi
 
   echo "   ✅ Built: ${IMAGE_TAG}"
 
@@ -100,41 +114,47 @@ elif [ -n "$ACR_NAME" ] && [ -d "$PROJECT_DIR/src/grubify/GrubifyApi" ]; then
   echo "   ✅ API deployed: ${CONTAINER_APP_URL}"
 
   # Build and deploy frontend
+  echo "   Building frontend image (this takes ~2-3 min)..."
+  FRONTEND_IMAGE="${ACR_LOGIN_SERVER}/grubify-frontend:latest"
   if [ -d "$PROJECT_DIR/src/grubify/grubify-frontend" ]; then
-    FRONTEND_IMAGE="${ACR_LOGIN_SERVER}/grubify-frontend:latest"
-
-    echo "   Building frontend image in ACR (this takes ~2-3 min)..."
     az acr build \
       --registry "$ACR_NAME" \
       --image "grubify-frontend:latest" \
       --file "$PROJECT_DIR/src/grubify/grubify-frontend/Dockerfile" \
       "$PROJECT_DIR/src/grubify/grubify-frontend" \
       --no-logs --output none 2>/dev/null
-
-    echo "   ✅ Frontend built"
-    echo "   Deploying frontend to container app..."
-    az containerapp update \
-      --name "$FRONTEND_APP_NAME" \
-      --resource-group "$RESOURCE_GROUP" \
-      --image "$FRONTEND_IMAGE" \
-      --set-env-vars "REACT_APP_API_BASE_URL=https://${CONTAINER_APP_URL#https://}/api" \
-      --output none 2>/dev/null
-
-    FRONTEND_URL=$(az containerapp show --name "$FRONTEND_APP_NAME" --resource-group "$RESOURCE_GROUP" --query "properties.configuration.ingress.fqdn" -o tsv 2>/dev/null)
-    FRONTEND_URL="https://${FRONTEND_URL}"
-    azd env set FRONTEND_APP_URL "$FRONTEND_URL" 2>/dev/null || true
-
-    echo "   ✅ Frontend deployed: ${FRONTEND_URL}"
-
-    # Set CORS on the API to allow requests from the frontend
-    echo "   Configuring CORS on API..."
-    az containerapp update \
-      --name "$CONTAINER_APP_NAME" \
-      --resource-group "$RESOURCE_GROUP" \
-      --set-env-vars "AllowedOrigins__0=${FRONTEND_URL}" \
-      --output none 2>/dev/null
-    echo "   ✅ CORS configured"
+  else
+    az acr build \
+      --registry "$ACR_NAME" \
+      --image "grubify-frontend:latest" \
+      --file "grubify-frontend/Dockerfile" \
+      "${GRUBIFY_REPO}#main:grubify-frontend" \
+      --no-logs --output none 2>/dev/null
   fi
+
+  echo "   ✅ Frontend built"
+  echo "   Deploying frontend to container app..."
+  az containerapp update \
+    --name "$FRONTEND_APP_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --image "$FRONTEND_IMAGE" \
+    --set-env-vars "REACT_APP_API_BASE_URL=https://${CONTAINER_APP_URL#https://}/api" \
+    --output none 2>/dev/null
+
+  FRONTEND_URL=$(az containerapp show --name "$FRONTEND_APP_NAME" --resource-group "$RESOURCE_GROUP" --query "properties.configuration.ingress.fqdn" -o tsv 2>/dev/null)
+  FRONTEND_URL="https://${FRONTEND_URL}"
+  azd env set FRONTEND_APP_URL "$FRONTEND_URL" 2>/dev/null || true
+
+  echo "   ✅ Frontend deployed: ${FRONTEND_URL}"
+
+  # Set CORS on the API to allow requests from the frontend
+  echo "   Configuring CORS on API..."
+  az containerapp update \
+    --name "$CONTAINER_APP_NAME" \
+    --resource-group "$RESOURCE_GROUP" \
+    --set-env-vars "AllowedOrigins__0=${FRONTEND_URL}" \
+    --output none 2>/dev/null
+  echo "   ✅ CORS configured"
 else
   echo "   ⏭️  Skipped (ACR or source not found — using placeholder image)"
 fi
