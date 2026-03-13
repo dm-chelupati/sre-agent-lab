@@ -19,7 +19,7 @@ Welcome, @lab.User.FirstName! In this lab you will deploy an **Azure SRE Agent**
 
 ### Optional: GitHub Integration
 
-> [!Note] The **core lab** (IT Persona — incident detection, log analysis, remediation) works **without GitHub**. If you have a GitHub account, entering your PAT and username below unlocks two bonus scenarios: source code root cause analysis and automated issue triage.
+> [!Note] The **core lab** (IT Persona — incident detection, log analysis, remediation) works **without GitHub**. If you have a GitHub account, signing in via OAuth during setup unlocks two bonus scenarios: source code root cause analysis and automated issue triage.
 
 If you want to use GitHub:
 
@@ -42,9 +42,9 @@ If you want to use GitHub:
 
     Click **Generate token** at the bottom and paste it below:
 
-**GitHub PAT:** @lab.MaskedTextBox(githubPat)
+*> GitHub: Sign in via the OAuth URL printed after deployment.
 
-> [!Alert] The PAT is only used by the SRE Agent's GitHub MCP connector — it's how the agent creates issues and searches code in your forked repo.
+> [!Alert] GitHub OAuth uses browser sign-in — no tokens to manage. The agent accesses your repos through the OAuth connection.
 
 ===
 
@@ -57,7 +57,7 @@ In this section you will clone the lab repository and deploy all Azure resources
 - **Knowledge Base** — HTTP error runbooks and app architecture documentation
 - **Alert Rules** — Azure Monitor alerts for HTTP 5xx errors and error log spikes
 - **Subagent** — Incident handler with search memory and log analysis tools
-- *(If GitHub PAT provided)* GitHub MCP connector, code-analyzer, and issue-triager subagents
+- *(If GitHub PAT provided)* GitHub OAuth connector, code-analyzer, and issue-triager subagents
 
 > [!Knowledge] Architecture Overview
 >
@@ -88,7 +88,7 @@ In this section you will clone the lab repository and deploy all Azure resources
 > │                                │  └─────────────────────┘  │ │
 > │                                │                           │ │
 > │                                │  ┌─────────────────────┐  │ │
-> │                                │  │  GitHub MCP (opt.)  ─┼──┼─▶ GitHub
+> │                                │  │  GitHub OAuth (opt.)  ─┼──┼─▶ GitHub
 > │                                │  └─────────────────────┘  │ │
 > │                                └───────────────────────────┘ │
 > └──────────────────────────────────────────────────────────────┘
@@ -138,7 +138,7 @@ In this section you will clone the lab repository and deploy all Azure resources
 1. [] *(Only if you entered GitHub details above)* Set GitHub variables:
 
     ```
-    azd env set GITHUB_PAT "@lab.Variable(githubPat)"
+    # GitHub: sign in via OAuth URL after deployment (no PAT needed)
     azd env set GITHUB_USER "@lab.Variable(githubUser)"
     ```
 
@@ -213,7 +213,7 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
 
 1. [] You should see the **incident-handler** subagent with:
     - **Autonomy:** Autonomous
-    - **Tools:** SearchMemory, RunAzCliReadCommands, QueryLogAnalyticsByWorkspaceId (+ github-mcp/* if GitHub was configured)
+    - **Tools:** SearchMemory, RunAzCliReadCommands, QueryLogAnalyticsByWorkspaceId (+ github/* if GitHub was configured)
 
 1. [] Click on **incident-handler** to see its system prompt and tool assignments.
 
@@ -225,7 +225,7 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
 
 1. [] Click **Builder** → **Connectors**.
 
-1. [] If you provided a GitHub PAT, you should see **github-mcp** with a green **Connected** status.
+1. [] If you provided a GitHub PAT, you should see **github** with a green **Connected** status.
 
 > [!Hint] If you didn't provide a GitHub PAT and want to add GitHub now, run:
 >
@@ -564,8 +564,8 @@ This sends another burst of requests to the cart API, triggering new 500 errors 
 | Persona | What the Agent Did | Key Capabilities |
 |:--------|:-------------------|:-----------------|
 | **IT Operations** | Detected alert → investigated logs + KB → remediated → summarized | Azure Monitor, Knowledge base, Search memory, Autonomous mode |
-| **Developer** | Searched source code → correlated logs to code → suggested fixes | GitHub MCP, Code search, file:line references |
-| **Workflow Automation** | Triaged issues → classified → labeled → commented | GitHub MCP tools, Runbook-driven automation |
+| **Developer** | Searched source code → correlated logs to code → suggested fixes | GitHub OAuth, Code search, file:line references |
+| **Workflow Automation** | Triaged issues → classified → labeled → commented | GitHub OAuth tools, Runbook-driven automation |
 
 ---
 
@@ -581,7 +581,7 @@ Everything below was configured automatically when you ran `azd up`:
 - [] Knowledge base files uploaded (post-provision script)
 - [] Incident handler subagent created (post-provision script)
 - [] Incident response plan created (post-provision script)
-- [] *(If GitHub PAT)* GitHub MCP connector, code-analyzer, issue-triager, sample customer issues (post-provision script)
+- [] *(If GitHub PAT)* GitHub OAuth connector, code-analyzer, issue-triager, sample customer issues (post-provision script)
 
 ---
 

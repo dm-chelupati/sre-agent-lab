@@ -15,7 +15,7 @@ Deploy an Azure SRE Agent connected to a sample application with a single `azd u
 - `Microsoft.App` resource provider registered on the subscription
 
 **Optional (for GitHub integration):**
-- GitHub account with a [Personal Access Token](https://github.com/settings/tokens) (repo scope)
+- GitHub account (OAuth sign-in during setup — no PAT needed)
 
 ## Quick Start
 
