@@ -36,9 +36,10 @@ SKIP_BUILD=""
 RETRY_MODE=""
 for arg in "$@"; do
   case "$arg" in
-    --skip-build) SKIP_BUILD="true" ;;
-    --retry)      SKIP_BUILD="true"; RETRY_MODE="true" ;;
-    --status)     STATUS_ONLY="true" ;;
+    --skip-build)  SKIP_BUILD="true" ;;
+    --retry)       SKIP_BUILD="true"; RETRY_MODE="true" ;;
+    --status)      STATUS_ONLY="true" ;;
+    --build-only)  BUILD_ONLY="true" ;;
   esac
 done
 
@@ -227,6 +228,18 @@ else
   echo "   ⏭️  Skipped (ACR or source not found — using placeholder image)"
 fi
 echo ""
+
+# Exit early if --build-only
+if [ -n "${BUILD_ONLY:-}" ]; then
+  echo "============================================="
+  echo "  ✅ Build & Deploy Complete!"
+  echo "============================================="
+  echo ""
+  echo "  🌐 Grubify API:   ${CONTAINER_APP_URL:-check Azure Portal}"
+  echo "  🖥️  Grubify UI:    ${FRONTEND_URL:-check Azure Portal}"
+  echo "============================================="
+  exit 0
+fi
 
 # ── Helper: Get bearer token ─────────────────────────────────────────────────
 get_token() {
