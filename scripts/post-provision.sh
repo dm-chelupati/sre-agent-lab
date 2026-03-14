@@ -113,9 +113,21 @@ elif [ -n "$ACR_NAME" ]; then
     --image "$IMAGE_TAG" \
     --output none 2>/dev/null
 
-  # Refresh the app URL after update
-  CONTAINER_APP_URL=$(az containerapp show --name "$CONTAINER_APP_NAME" --resource-group "$RESOURCE_GROUP" --query "properties.configuration.ingress.fqdn" -o tsv 2>/dev/null)
-  CONTAINER_APP_URL="https://${CONTAINER_APP_URL}"
+  # Refresh the app URL after update (retry if empty — Windows Git Bash can be slow)
+  FQDN=""
+  for i in 1 2 3; do
+    FQDN=$(az containerapp show --name "$CONTAINER_APP_NAME" --resource-group "$RESOURCE_GROUP" --query "properties.configuration.ingress.fqdn" -o tsv 2>/dev/null | tr -d '\r')
+    if [ -n "$FQDN" ] && [ "$FQDN" != "None" ]; then
+      break
+    fi
+    sleep 5
+  done
+  if [ -n "$FQDN" ] && [ "$FQDN" != "None" ]; then
+    CONTAINER_APP_URL="https://${FQDN}"
+  else
+    CONTAINER_APP_URL=""
+    echo "   ⚠️  Could not get API FQDN. Check Azure Portal for the URL."
+  fi
   azd env set CONTAINER_APP_URL "$CONTAINER_APP_URL" 2>/dev/null || true
 
   echo "   ✅ API deployed: ${CONTAINER_APP_URL}"
@@ -148,20 +160,34 @@ elif [ -n "$ACR_NAME" ]; then
     --set-env-vars "REACT_APP_API_BASE_URL=https://${CONTAINER_APP_URL#https://}/api" \
     --output none 2>/dev/null
 
-  FRONTEND_URL=$(az containerapp show --name "$FRONTEND_APP_NAME" --resource-group "$RESOURCE_GROUP" --query "properties.configuration.ingress.fqdn" -o tsv 2>/dev/null)
-  FRONTEND_URL="https://${FRONTEND_URL}"
+  FE_FQDN=""
+  for i in 1 2 3; do
+    FE_FQDN=$(az containerapp show --name "$FRONTEND_APP_NAME" --resource-group "$RESOURCE_GROUP" --query "properties.configuration.ingress.fqdn" -o tsv 2>/dev/null | tr -d '\r')
+    if [ -n "$FE_FQDN" ] && [ "$FE_FQDN" != "None" ]; then
+      break
+    fi
+    sleep 5
+  done
+  if [ -n "$FE_FQDN" ] && [ "$FE_FQDN" != "None" ]; then
+    FRONTEND_URL="https://${FE_FQDN}"
+  else
+    FRONTEND_URL=""
+    echo "   ⚠️  Could not get frontend FQDN. Check Azure Portal for the URL."
+  fi
   azd env set FRONTEND_APP_URL "$FRONTEND_URL" 2>/dev/null || true
 
   echo "   ✅ Frontend deployed: ${FRONTEND_URL}"
 
   # Set CORS on the API to allow requests from the frontend
-  echo "   Configuring CORS on API..."
-  az containerapp update \
-    --name "$CONTAINER_APP_NAME" \
-    --resource-group "$RESOURCE_GROUP" \
-    --set-env-vars "AllowedOrigins__0=${FRONTEND_URL}" \
-    --output none 2>/dev/null
-  echo "   ✅ CORS configured"
+  if [ -n "$FRONTEND_URL" ]; then
+    echo "   Configuring CORS on API..."
+    az containerapp update \
+      --name "$CONTAINER_APP_NAME" \
+      --resource-group "$RESOURCE_GROUP" \
+      --set-env-vars "AllowedOrigins__0=${FRONTEND_URL}" \
+      --output none 2>/dev/null
+    echo "   ✅ CORS configured"
+  fi
 else
   echo "   ⏭️  Skipped (ACR or source not found — using placeholder image)"
 fi
