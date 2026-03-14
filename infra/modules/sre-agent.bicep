@@ -62,8 +62,16 @@ resource sreAgent 'Microsoft.App/agents@2025-05-01-preview' = {
   }
 }
 
-// SRE Agent Administrator role assignment moved to post-provision.sh
-// (Bicep role assignments require Owner/UAA which lab users may not have)
+// Assign SRE Agent Administrator role to the deployer
+resource sreAgentAdminRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(sreAgent.id, deployer().objectId, sreAgentAdminRoleId)
+  scope: sreAgent
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', sreAgentAdminRoleId)
+    principalId: deployer().objectId
+    principalType: 'User'
+  }
+}
 
 // Outputs
 output agentName string = sreAgent.name
