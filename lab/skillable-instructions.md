@@ -277,7 +277,7 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
 
 1. [] Click on **incident-handler** to see its system prompt and tool assignments.
 
-> [!Knowledge] If you provided a GitHub PAT, you'll also see **code-analyzer** and **issue-triager** subagents on the canvas.
+> [!Knowledge] If you set up GitHub OAuth, you'll also see **code-analyzer** and **issue-triager** subagents on the canvas.
 
 ---
 
@@ -285,12 +285,12 @@ Before diving into specific scenarios, explore what `azd up` configured for you.
 
 1. [] Click **Builder** → **Connectors**.
 
-1. [] If you provided a GitHub PAT, you should see **github** with a green **Connected** status.
+1. [] If you set up GitHub OAuth, you should see **github** with a green **Connected** status.
 
-> [!Hint] If you didn't provide a GitHub PAT and want to add GitHub now, run:
+> [!Hint] If you didn't set up GitHub OAuth and want to add it now, run:
 >
 > ```
-> export GITHUB_PAT=<your-pat>
+> ./scripts/setup-github.sh
 > ./scripts/setup-github.sh
 > ```
 
@@ -486,7 +486,7 @@ This sends another burst of requests to the cart API, triggering new 500 errors 
 
 # Part 4: Developer Persona — Deep Root Cause with Source Code
 
-> [!Alert] **This section requires a GitHub PAT.** If you did not provide one during setup, skip to **Part 6: Review & Cleanup**. You can also add GitHub now by running: `export GITHUB_PAT=<pat> && ./scripts/setup-github.sh`
+> [!Alert] **This section requires GitHub OAuth.** If you did not set up GitHub during setup, skip to **Part 6: Review & Cleanup**. You can also add GitHub now by running: `./scripts/setup-github.sh`
 
 **Scenario:** The incident-handler subagent (Part 3) created a GitHub issue using only log analysis. Now use the **code-analyzer** subagent to create a RICHER issue that includes source code references. Compare the two issues to see the value of connecting source code.
 
@@ -564,7 +564,7 @@ This sends another burst of requests to the cart API, triggering new 500 errors 
 
 # Part 5: Workflow Automation — Issue Triage
 
-> [!Alert] **This section requires a GitHub PAT.** If you did not provide one during setup, skip to **Part 6: Review & Cleanup**.
+> [!Alert] **This section requires GitHub OAuth.** If you did not set up GitHub during setup, skip to **Part 6: Review & Cleanup**.
 
 **Scenario:** During setup, `azd up` created 5 sample customer-reported issues in `@lab.Variable(githubUser)/grubify` — these simulate real user complaints like "App crashes when adding items to cart" and "Can't place an order." Now use the **issue-triager** subagent to triage those issues — classify them, add labels, and post a structured comment. A scheduled task runs this automatically every 12 hours.
 
