@@ -17,8 +17,15 @@ elif command -v python &>/dev/null; then
   PYTHON=python
 else
   echo "❌ ERROR: Python not found. Install Python 3."
+  echo "   Windows: winget install Python.Python.3.12"
+  echo "   Then disable App execution aliases for python.exe in Settings."
   exit 1
 fi
+
+# Temp directory — works on both Linux (/tmp) and Windows (TEMP/TMPDIR)
+TEMP_DIR="${TMPDIR:-${TEMP:-/tmp}}"
+# On Windows Git Bash, TEMP may have backslashes — convert to forward slashes
+TEMP_DIR="${TEMP_DIR//\\//}"
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
@@ -173,22 +180,22 @@ create_subagent() {
   token=$(get_token)
 
   # Convert YAML spec to API JSON using helper script
-  $PYTHON "$SCRIPT_DIR/yaml-to-api-json.py" "$yaml_file" "/tmp/${agent_name}-body.json" > /dev/null 2>&1
+  $PYTHON "$SCRIPT_DIR/yaml-to-api-json.py" "$yaml_file" "${TEMP_DIR}/${agent_name}-body.json" > /dev/null 2>&1
 
   local http_code
-  http_code=$(curl -s -o /tmp/${agent_name}-resp.txt -w "%{http_code}" \
+  http_code=$(curl -s -o ${TEMP_DIR}/${agent_name}-resp.txt -w "%{http_code}" \
     -X PUT "${AGENT_ENDPOINT}/api/v2/extendedAgent/agents/${agent_name}" \
     -H "Authorization: Bearer ${token}" \
     -H "Content-Type: application/json" \
-    --data-binary @"/tmp/${agent_name}-body.json")
+    --data-binary @"${TEMP_DIR}/${agent_name}-body.json")
 
   if [ "$http_code" = "200" ] || [ "$http_code" = "201" ] || [ "$http_code" = "202" ] || [ "$http_code" = "204" ]; then
     echo "   ✅ Created: ${agent_name}"
   else
     echo "   ⚠️  ${agent_name} returned HTTP ${http_code}"
-    cat "/tmp/${agent_name}-resp.txt" 2>/dev/null | head -3
+    cat "${TEMP_DIR}/${agent_name}-resp.txt" 2>/dev/null | head -3
   fi
-  rm -f "/tmp/${agent_name}-body.json" "/tmp/${agent_name}-resp.txt"
+  rm -f "${TEMP_DIR}/${agent_name}-body.json" "${TEMP_DIR}/${agent_name}-resp.txt"
 }
 
 # ── Helper: Check if something exists (for --retry mode) ─────────────────────
@@ -278,7 +285,7 @@ else
 FILTER_CREATED=false
 for attempt in 1 2 3; do
   TOKEN=$(get_token)
-  HTTP_CODE=$(curl -s -o /tmp/response-plan-resp.txt -w "%{http_code}" \
+  HTTP_CODE=$(curl -s -o ${TEMP_DIR}/response-plan-resp.txt -w "%{http_code}" \
     -X PUT "${AGENT_ENDPOINT}/api/v1/incidentPlayground/filters/grubify-http-errors" \
     -H "Authorization: Bearer ${TOKEN}" \
     -H "Content-Type: application/json" \
@@ -297,7 +304,7 @@ done
   if [ "$FILTER_CREATED" = "false" ]; then
     echo "   ⚠️  Response plan failed after 3 attempts (set up in portal or run: ./scripts/post-provision.sh --retry)"
   fi
-  rm -f /tmp/response-plan-resp.txt
+  rm -f ${TEMP_DIR}/response-plan-resp.txt
 fi
 
 # Always delete the default quickstart handler (auto-created by Azure Monitor platform)
@@ -395,14 +402,14 @@ $PYTHON -c "
 import json, os
 repo = os.environ.get('GITHUB_REPO', 'dm-chelupati/grubify')
 body = {'name':'triage-grubify-issues','description':f'Triage customer issues in {repo} every 12 hours','cronExpression':'0 */12 * * *','agentPrompt':f'Use the issue-triager subagent to list all open issues in {repo} that have [Customer Issue] in the title and have not been triaged yet. For each untriaged customer issue, classify it, add labels, and post a triage comment following the triage runbook in the knowledge base.','agent':'issue-triager'}
-with open('/tmp/scheduled-task-body.json', 'w') as f: json.dump(body, f)
+with open('${TEMP_DIR}/scheduled-task-body.json', 'w') as f: json.dump(body, f)
 "
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
   -X POST "${AGENT_ENDPOINT}/api/v1/scheduledtasks" \
   -H "Authorization: Bearer ${TOKEN}" \
   -H "Content-Type: application/json" \
-  --data-binary @/tmp/scheduled-task-body.json)
-rm -f /tmp/scheduled-task-body.json
+  --data-binary @${TEMP_DIR}/scheduled-task-body.json)
+rm -f ${TEMP_DIR}/scheduled-task-body.json
 if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "202" ]; then
   echo "   ✅ Scheduled task: triage-grubify-issues (every 12h → issue-triager)"
 else

@@ -98,12 +98,46 @@ In this section you will clone the lab repository and deploy all Azure resources
 
 ### Prerequisites (Windows lab)
 
-> [!Knowledge] If Python is not installed, run in CMD: `winget install Python.Python.3.12` then open a new terminal. The post-provision script requires Python 3.
+> [!Knowledge] **Required before starting:**
 >
-> Also register the required resource provider:
-> ```
-> az provider register -n Microsoft.App --wait
-> ```
+> 1. **Install Python 3** (needed by the setup script):
+>    ```
+>    winget install Python.Python.3.12 --accept-source-agreements --accept-package-agreements
+>    ```
+> 2. **Disable Windows Store Python aliases** — Open **Settings → Apps → Advanced app settings → App execution aliases** → turn OFF `python.exe` and `python3.exe`
+> 3. **Register the resource provider:**
+>    ```
+>    az provider register -n Microsoft.App --wait
+>    ```
+> 4. **Verify** (open a NEW CMD window):
+>    ```
+>    python --version
+>    git --version
+>    az --version
+>    azd version
+>    ```
+
+### What gets deployed
+
+> [!Knowledge] The deployment creates these resources and configurations:
+>
+> **Azure Resources** ([learn more](https://sre.azure.com/docs/get-started/create-and-setup)):
+> - SRE Agent with managed identity
+> - Grubify sample app on Container Apps
+> - Log Analytics + App Insights for monitoring
+> - Azure Monitor alert rules for HTTP 5xx errors
+> - Container Registry for app images
+>
+> **RBAC Roles** ([learn more](https://sre.azure.com/docs/tutorials/agent-config/manage-permissions)):
+> - SRE Agent Administrator on the agent resource
+> - Reader + Monitoring Reader + Log Analytics Reader on the resource group
+>
+> **Agent Configuration** (via post-provision script):
+> - Knowledge base files ([Memory & Knowledge](https://sre.azure.com/docs/concepts/memory))
+> - incident-handler subagent ([Custom Agents](https://sre.azure.com/docs/concepts/subagents))
+> - Azure Monitor incident platform ([Incident Platforms](https://sre.azure.com/docs/concepts/incident-platforms))
+> - Response plan for HTTP 500 alerts ([Response Plans](https://sre.azure.com/docs/capabilities/incident-response-plans))
+> - *(Optional)* GitHub OAuth connector + code-analyzer + issue-triager ([Connectors](https://sre.azure.com/docs/concepts/connectors))
 
 ### Step 1: Sign in to Azure
 
